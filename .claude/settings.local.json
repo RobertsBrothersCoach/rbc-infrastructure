@@ -9,7 +9,10 @@
       "Bash(az account show:*)",
       "Bash(az group list:*)",
       "Bash(az acr list:*)",
-      "Bash(az ad sp create-for-rbac:*)"
+      "Bash(az ad sp create-for-rbac:*)",
+      "Bash(gh api:*)",
+      "Bash(gh secret set:*)",
+      "Bash(gh secret list:*)"
     ],
     "deny": [],
     "ask": []

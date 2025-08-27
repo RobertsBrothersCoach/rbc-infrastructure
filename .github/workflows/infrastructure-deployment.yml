@@ -63,9 +63,10 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           az deployment sub what-if \
-            --location eastus \
+            --location eastus2 \
             --template-file bicep/main.bicep \
             --parameters bicep/environments/dev.parameters.json \
+            --parameters administratorPassword="placeholder" \
             --name pr-${{ github.event.pull_request.number }}
 
   # Deploy to Development
@@ -91,11 +92,11 @@ jobs:
       - name: Deploy infrastructure
         run: |
           az deployment sub create \
-            --location eastus \
+            --location eastus2 \
             --template-file bicep/main.bicep \
             --parameters bicep/environments/dev.parameters.json \
-            --name dev-${{ github.run_number }} \
-            --confirm-with-what-if
+            --parameters administratorPassword="${{ secrets.POSTGRES_ADMIN_PASSWORD_DEV }}" \
+            --name dev-${{ github.run_number }}
       
       - name: Output deployment results
         run: |
@@ -113,7 +114,7 @@ jobs:
       github.event.inputs.environment == 'qa'
     environment:
       name: qa
-      url: https://qa.yourdomain.com
+      url: https://staging.rbc-leasing.azurewebsites.net
     
     steps:
       - uses: actions/checkout@v4
@@ -126,11 +127,11 @@ jobs:
       - name: Deploy infrastructure
         run: |
           az deployment sub create \
-            --location eastus \
+            --location eastus2 \
             --template-file bicep/main.bicep \
             --parameters bicep/environments/qa.parameters.json \
-            --name qa-${{ github.run_number }} \
-            --confirm-with-what-if
+            --parameters administratorPassword="${{ secrets.POSTGRES_ADMIN_PASSWORD_QA }}" \
+            --name qa-${{ github.run_number }}
       
       - name: Run smoke tests
         run: |
@@ -147,7 +148,7 @@ jobs:
       github.event.inputs.environment == 'prod'
     environment:
       name: production
-      url: https://www.yourdomain.com
+      url: https://rbc-leasing.azurewebsites.net
     
     steps:
       - uses: actions/checkout@v4
@@ -165,11 +166,11 @@ jobs:
       - name: Deploy infrastructure
         run: |
           az deployment sub create \
-            --location eastus \
+            --location eastus2 \
             --template-file bicep/main.bicep \
             --parameters bicep/environments/prod.parameters.json \
-            --name prod-${{ github.run_number }} \
-            --confirm-with-what-if
+            --parameters administratorPassword="${{ secrets.POSTGRES_ADMIN_PASSWORD_PROD }}" \
+            --name prod-${{ github.run_number }}
       
       - name: Tag release
         if: success()
