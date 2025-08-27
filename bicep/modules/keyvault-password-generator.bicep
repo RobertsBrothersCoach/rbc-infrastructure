@@ -11,15 +11,17 @@ param passwordPurpose string = 'postgresql-admin'
 @secure()
 param existingPassword string = ''
 
+@description('Timestamp for password generation')
+param timestamp string = utcNow()
+
 // Reference existing Key Vault
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: keyVaultName
 }
 
 // Generate a complex password using Bicep functions
-var timestamp = utcNow()
 var baseString = uniqueString(resourceGroup().id, passwordPurpose, environmentName, timestamp)
-var complexPassword = '${toUpper(take(baseString, 2))}${baseString}${take(uniqueString(timestamp), 4)}!@#'
+var complexPassword = '${toUpper(take(baseString, 2))}${baseString}${take(uniqueString(subscription().subscriptionId, timestamp), 4)}!@#'
 
 // Store password in Key Vault
 resource passwordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
