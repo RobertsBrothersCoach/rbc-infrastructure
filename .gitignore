@@ -23,6 +23,12 @@ Thumbs.db
 secrets/
 *-secrets.yaml
 *-secret.yaml
+config/service-principal-*.json
+*.secret
+.env
+.env.local
+.env.*.local
+environments/*.env
 
 # Helm
 *.tgz

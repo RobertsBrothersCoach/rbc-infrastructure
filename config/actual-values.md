@@ -19,10 +19,15 @@
 - **Domain**: To be determined (needs to be purchased or configured)
 - **Suggested**: rbcleasing.com or rbc-leasing.azurewebsites.net
 
+## Service Principal (Development)
+- **Client ID (App ID)**: e4e45f45-cdae-4b9d-b163-e2581e02e096
+- **Display Name**: sp-rbc-infrastructure-dev
+- **Secret**: Stored in GitHub Secrets as AZURE_CREDENTIALS_DEV
+
 ## Placeholders to Replace
-1. `your-org` → `RobertsBrothersCoach`
-2. `your-acr.azurecr.io` → `acrrbcdev.azurecr.io` (after creation)
-3. `yourdomain.com` → TBD (use azurewebsites.net initially)
-4. `YOUR_TENANT_ID` → `2bf8eca0-5705-47f9-bad9-10a86ef58a19`
-5. `YOUR_CLIENT_ID` → To be created with service principal
-6. `YOUR_AZURE_AD_*_GROUP_ID` → To be created
+1. `your-org` → `RobertsBrothersCoach` ✅
+2. `your-acr.azurecr.io` → `acrrbcdev.azurecr.io` ✅ (will be created)
+3. `yourdomain.com` → `rbc-leasing.azurewebsites.net` ✅
+4. `YOUR_TENANT_ID` → `2bf8eca0-5705-47f9-bad9-10a86ef58a19` ✅
+5. `YOUR_CLIENT_ID` → `e4e45f45-cdae-4b9d-b163-e2581e02e096` ✅
+6. `YOUR_AZURE_AD_*_GROUP_ID` → To be created during ArgoCD setup
