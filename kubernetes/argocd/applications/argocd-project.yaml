@@ -7,7 +7,7 @@ spec:
   description: Production project with restricted access
   
   sourceRepos:
-    - 'https://github.com/your-org/RBC-Infrastructure'
+    - 'https://github.com/RobertsBrothersCoach/rbc-infrastructure'
   
   destinations:
     - namespace: 'leasing-app-prod'

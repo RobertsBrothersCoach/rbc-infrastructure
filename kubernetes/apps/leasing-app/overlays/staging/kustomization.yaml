@@ -23,9 +23,9 @@ configMapGenerator:
       - ENABLE_DEBUG=false
 
 images:
-  - name: your-acr.azurecr.io/leasing-app-backend
+  - name: acrrbcstaging.azurecr.io/leasing-app-backend
     newTag: staging-v1.0.0
-  - name: your-acr.azurecr.io/leasing-app-frontend
+  - name: acrrbcstaging.azurecr.io/leasing-app-frontend
     newTag: staging-v1.0.0
 
 replicas:

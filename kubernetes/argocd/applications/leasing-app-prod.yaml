@@ -12,7 +12,7 @@ metadata:
 spec:
   project: production
   source:
-    repoURL: https://github.com/your-org/RBC-Infrastructure
+    repoURL: https://github.com/RobertsBrothersCoach/rbc-infrastructure
     targetRevision: main
     path: kubernetes/apps/leasing-app/overlays/prod
   destination:

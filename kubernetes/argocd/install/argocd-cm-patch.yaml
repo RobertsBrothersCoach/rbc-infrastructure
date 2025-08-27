@@ -9,7 +9,7 @@ data:
   
   oidc.config: |
     name: Azure AD
-    issuer: https://login.microsoftonline.com/YOUR_TENANT_ID/v2.0
+    issuer: https://login.microsoftonline.com/2bf8eca0-5705-47f9-bad9-10a86ef58a19/v2.0
     clientId: YOUR_CLIENT_ID
     clientSecret: $oidc.azure.clientSecret
     requestedScopes: ["openid", "profile", "email"]
@@ -17,9 +17,9 @@ data:
     
   # Repository configuration
   repositories: |
-    - url: https://github.com/your-org/RBC-Infrastructure
+    - url: https://github.com/RobertsBrothersCoach/rbc-infrastructure
       type: git
-    - url: https://github.com/your-org/RBC-LeasingApp
+    - url: https://github.com/RobertsBrothersCoach/RBC-LeasingApp
       type: git
       
   # Resource customizations for health checks

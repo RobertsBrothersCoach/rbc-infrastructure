@@ -21,7 +21,7 @@ spec:
       serviceAccountName: leasing-app
       containers:
       - name: backend
-        image: your-acr.azurecr.io/leasing-app-backend:latest
+        image: acrrbcdev.azurecr.io/leasing-app-backend:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 5000
@@ -112,7 +112,7 @@ spec:
       serviceAccountName: leasing-app
       containers:
       - name: frontend
-        image: your-acr.azurecr.io/leasing-app-frontend:latest
+        image: acrrbcdev.azurecr.io/leasing-app-frontend:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 80
@@ -120,7 +120,7 @@ spec:
           protocol: TCP
         env:
         - name: VITE_API_URL
-          value: "https://api.yourdomain.com/api"
+          value: "https://api.rbc-leasing.azurewebsites.net/api"
         resources:
           requests:
             memory: "128Mi"

@@ -48,9 +48,9 @@ echo "   New tag: $NEW_TAG"
 
 # Update the image tag using sed
 if [[ "$COMPONENT" == "backend" ]]; then
-    sed -i.bak "s|your-acr.azurecr.io/leasing-app-backend:.*|your-acr.azurecr.io/leasing-app-backend:${NEW_TAG}|g" "$KUSTOMIZATION_FILE"
+    sed -i.bak "s|acrrbc*.azurecr.io/leasing-app-backend:.*|acrrbc${ENVIRONMENT}.azurecr.io/leasing-app-backend:${NEW_TAG}|g" "$KUSTOMIZATION_FILE"
 else
-    sed -i.bak "s|your-acr.azurecr.io/leasing-app-frontend:.*|your-acr.azurecr.io/leasing-app-frontend:${NEW_TAG}|g" "$KUSTOMIZATION_FILE"
+    sed -i.bak "s|acrrbc*.azurecr.io/leasing-app-frontend:.*|acrrbc${ENVIRONMENT}.azurecr.io/leasing-app-frontend:${NEW_TAG}|g" "$KUSTOMIZATION_FILE"
 fi
 
 # Remove backup file
