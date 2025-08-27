@@ -91,6 +91,8 @@ module aksCluster 'modules/aks-cost-effective.bicep' = {
     keyVaultName: keyVault.outputs.name
     logAnalyticsWorkspaceId: monitoring.outputs.workspaceId
     enableAutoShutdown: enableAutoShutdown
+    minNodeCount: 1  // Explicitly set to 1 (system pools require at least 1 node)
+    maxNodeCount: 3  // Max 3 nodes for dev environment
   }
   dependsOn: [
     monitoring
