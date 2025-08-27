@@ -29,7 +29,8 @@
       "Bash(az login:*)",
       "Bash(az ad sp show:*)",
       "Bash(find:*)",
-      "Bash(az deployment sub show:*)"
+      "Bash(az deployment sub show:*)",
+      "Bash(az aks get-versions:*)"
     ],
     "deny": [],
     "ask": []
