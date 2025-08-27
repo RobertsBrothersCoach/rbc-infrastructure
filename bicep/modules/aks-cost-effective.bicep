@@ -151,16 +151,17 @@ resource autoShutdownSchedule 'Microsoft.DevTestLab/schedules@2018-09-15' = if (
   }
 }
 
-// Role assignments for AKS
-resource aksContainerRegistryPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  scope: resourceGroup()
-  name: guid(resourceGroup().id, 'aks-acr-pull', environmentName)
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d') // AcrPull
-    principalId: aksCluster.properties.identityProfile.kubeletidentity.objectId
-    principalType: 'ServicePrincipal'
-  }
-}
+// Role assignments for AKS - will be configured manually after deployment
+// Commented out due to service principal permission limitations
+// resource aksContainerRegistryPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+//   scope: resourceGroup()
+//   name: guid(resourceGroup().id, 'aks-acr-pull', environmentName)
+//   properties: {
+//     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d') // AcrPull
+//     principalId: aksCluster.properties.identityProfile.kubeletidentity.objectId
+//     principalType: 'ServicePrincipal'
+//   }
+// }
 
 // Outputs
 output clusterName string = aksCluster.name

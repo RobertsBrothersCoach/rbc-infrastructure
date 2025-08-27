@@ -20,7 +20,11 @@
       "Bash(gh run watch:*)",
       "Bash(gh issue close:*)",
       "Bash(az resource list:*)",
-      "Bash(az bicep build:*)"
+      "Bash(az bicep build:*)",
+      "Bash(az aks list:*)",
+      "Bash(az role assignment create:*)",
+      "Bash(az account set:*)",
+      "Bash(az deployment group list:*)"
     ],
     "deny": [],
     "ask": []
