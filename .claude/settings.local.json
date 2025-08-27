@@ -33,9 +33,29 @@
       "Bash(az aks get-versions:*)",
       "Bash(az provider register:*)",
       "Bash(az aks delete:*)",
-      "Bash(az aks wait:*)"
+      "Bash(az aks wait:*)",
+      "Bash(az deployment operation list:*)",
+      "Bash(az deployment sub list:*)",
+      "Bash(az aks show:*)",
+      "Bash(az aks get-credentials:*)",
+      "Bash(bash:*)",
+      "Bash(curl:*)",
+      "Bash(chmod:*)",
+      "Bash(./get_helm.sh)",
+      "Bash(choco install:*)",
+      "Bash(helm version:*)",
+      "Bash(./windows-amd64/helm.exe version --short)",
+      "Bash(kubectl apply:*)",
+      "Bash(az aks:*)",
+      "Bash(kubectl wait:*)",
+      "Bash(kubectl delete:*)",
+      "Bash(kubectl get service:*)",
+      "Bash(kubectl:*)"
     ],
     "deny": [],
-    "ask": []
+    "ask": [],
+    "additionalDirectories": [
+      "C:\\usr"
+    ]
   }
 }

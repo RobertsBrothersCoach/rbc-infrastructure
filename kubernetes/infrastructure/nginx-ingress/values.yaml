@@ -1,0 +1,49 @@
+# nginx-ingress controller Helm values for cost-effective deployment
+controller:
+  replicaCount: 1  # Single replica for dev environment
+  
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  
+  service:
+    type: LoadBalancer
+    annotations:
+      service.beta.kubernetes.io/azure-load-balancer-sku: "Basic"
+  
+  # Enable metrics for monitoring
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: false  # Enable if using Prometheus
+  
+  # Autoscaling disabled for cost savings
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 80
+  
+  # Config for better performance
+  config:
+    use-forwarded-headers: "true"
+    compute-full-forwarded-for: "true"
+    use-proxy-protocol: "false"
+    proxy-body-size: "10m"
+    client-max-body-size: "10m"
+    
+  # Pod disruption budget
+  podDisruptionBudget:
+    enabled: false  # Disabled for single replica
+
+# Disable default backend to save resources
+defaultBackend:
+  enabled: false
+
+# ServiceMonitor for Prometheus (if needed later)
+serviceMonitor:
+  enabled: false

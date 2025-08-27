@@ -1,0 +1,79 @@
+# This file installs ArgoCD with cost-optimized settings
+# Source: https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+# We'll apply patches to reduce replicas for cost savings
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-install-script
+  namespace: argocd
+data:
+  install.sh: |
+    #!/bin/sh
+    echo "Installing ArgoCD..."
+    
+    # Download and apply ArgoCD installation
+    kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/v2.11.7/manifests/install.yaml
+    
+    # Wait for deployments to be ready
+    kubectl wait --for=condition=available --timeout=300s deployment/argocd-server -n argocd
+    
+    # Apply cost optimizations - reduce replicas
+    kubectl patch deployment argocd-server -n argocd -p '{"spec":{"replicas":1}}'
+    kubectl patch deployment argocd-repo-server -n argocd -p '{"spec":{"replicas":1}}'
+    kubectl patch deployment argocd-applicationset-controller -n argocd -p '{"spec":{"replicas":1}}'
+    kubectl patch deployment argocd-notifications-controller -n argocd -p '{"spec":{"replicas":1}}'
+    kubectl patch deployment argocd-redis -n argocd -p '{"spec":{"replicas":1}}'
+    kubectl patch deployment argocd-dex-server -n argocd -p '{"spec":{"replicas":1}}'
+    
+    echo "ArgoCD installation complete"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: argocd-installer
+  namespace: argocd
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: argocd-installer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: argocd-installer
+  namespace: argocd
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: install-argocd
+  namespace: argocd
+spec:
+  template:
+    spec:
+      serviceAccountName: argocd-installer
+      restartPolicy: Never
+      containers:
+      - name: installer
+        image: bitnami/kubectl:1.28
+        command:
+        - /bin/sh
+        - -c
+        - |
+          kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/v2.11.7/manifests/install.yaml
+          
+          echo "Waiting for ArgoCD deployments..."
+          kubectl wait --for=condition=available --timeout=300s deployment/argocd-server -n argocd || true
+          
+          echo "Applying cost optimizations..."
+          kubectl patch deployment argocd-server -n argocd -p '{"spec":{"replicas":1}}'
+          kubectl patch deployment argocd-repo-server -n argocd -p '{"spec":{"replicas":1}}'
+          kubectl patch deployment argocd-applicationset-controller -n argocd -p '{"spec":{"replicas":1}}' || true
+          kubectl patch deployment argocd-notifications-controller -n argocd -p '{"spec":{"replicas":1}}' || true
+          kubectl patch deployment argocd-dex-server -n argocd -p '{"spec":{"replicas":1}}' || true
+          
+          echo "ArgoCD installation complete"

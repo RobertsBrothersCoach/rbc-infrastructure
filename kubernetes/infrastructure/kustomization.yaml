@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  # Create namespaces first
+  - namespaces.yaml
+  
+  # Install nginx-ingress controller
+  - nginx-ingress/helm-release.yaml
+  
+  # Install cert-manager
+  - cert-manager/helm-release.yaml
+  
+  # Install ArgoCD
+  - argocd/install.yaml
+
+# These will be applied after the base installations
+generatorOptions:
+  disableNameSuffixHash: true
