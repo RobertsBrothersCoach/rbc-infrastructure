@@ -59,11 +59,11 @@ resource aksCluster 'Microsoft.ContainerService/managedClusters@2024-02-01' = {
       }
     ]
     
-    // Network configuration - basic for cost savings
+    // Network configuration - Standard SKU required due to quota
     networkProfile: {
       networkPlugin: 'kubenet' // More cost-effective than Azure CNI
       networkPolicy: 'calico'   // Free network policy
-      loadBalancerSku: 'Basic'  // Basic load balancer for dev
+      loadBalancerSku: 'Standard'  // Standard load balancer (Basic quota exhausted)
       serviceCidr: '10.100.0.0/16'
       dnsServiceIP: '10.100.0.10'
       podCidr: '10.101.0.0/16'

@@ -50,7 +50,9 @@
       "Bash(kubectl wait:*)",
       "Bash(kubectl delete:*)",
       "Bash(kubectl get service:*)",
-      "Bash(kubectl:*)"
+      "Bash(kubectl:*)",
+      "Bash(az network public-ip list:*)",
+      "Bash(az network list-usages:*)"
     ],
     "deny": [],
     "ask": [],
