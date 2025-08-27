@@ -1,0 +1,206 @@
+# Pod Security Standards and Policies
+# Enforces security best practices at the pod level
+
+---
+# Restricted Pod Security Policy (Most Secure)
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: restricted-psp
+  annotations:
+    seccomp.security.alpha.kubernetes.io/allowedProfileNames: 'runtime/default'
+    apparmor.security.beta.kubernetes.io/allowedProfileNames: 'runtime/default'
+spec:
+  # Don't allow privileged pods
+  privileged: false
+  allowPrivilegeEscalation: false
+  
+  # Required to prevent escalations to root
+  requiredDropCapabilities:
+  - ALL
+  
+  # Allow core volume types only
+  volumes:
+  - 'configMap'
+  - 'emptyDir'
+  - 'projected'
+  - 'secret'
+  - 'downwardAPI'
+  - 'persistentVolumeClaim'
+  
+  # Restrict host access
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  
+  # Require the container to run as non-root user
+  runAsUser:
+    rule: 'MustRunAsNonRoot'
+  seLinux:
+    rule: 'RunAsAny'
+  supplementalGroups:
+    rule: 'RunAsAny'
+  fsGroup:
+    rule: 'RunAsAny'
+  
+  # Read-only root filesystem
+  readOnlyRootFilesystem: true
+
+---
+# Baseline Pod Security Policy (Balanced)
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: baseline-psp
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  
+  requiredDropCapabilities:
+  - KILL
+  - MKNOD
+  - SETUID
+  - SETGID
+  
+  volumes:
+  - '*'
+  
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  
+  runAsUser:
+    rule: 'RunAsAny'
+  seLinux:
+    rule: 'RunAsAny'
+  supplementalGroups:
+    rule: 'RunAsAny'
+  fsGroup:
+    rule: 'RunAsAny'
+  
+  readOnlyRootFilesystem: false
+
+---
+# Security Context for Applications
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: security-context-template
+  namespace: default
+data:
+  deployment-template.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: secure-app
+    spec:
+      template:
+        metadata:
+          annotations:
+            # AppArmor profile
+            container.apparmor.security.beta.kubernetes.io/app: runtime/default
+        spec:
+          # Pod Security Context
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 3000
+            fsGroup: 2000
+            seccompProfile:
+              type: RuntimeDefault
+          
+          containers:
+          - name: app
+            image: myapp:latest
+            
+            # Container Security Context
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              runAsNonRoot: true
+              runAsUser: 1000
+              capabilities:
+                drop:
+                - ALL
+                add:
+                - NET_BIND_SERVICE
+            
+            # Resource limits (prevent resource exhaustion)
+            resources:
+              requests:
+                memory: "64Mi"
+                cpu: "250m"
+              limits:
+                memory: "128Mi"
+                cpu: "500m"
+            
+            # Health checks
+            livenessProbe:
+              httpGet:
+                path: /health
+                port: 8080
+              initialDelaySeconds: 30
+              periodSeconds: 10
+            
+            readinessProbe:
+              httpGet:
+                path: /ready
+                port: 8080
+              initialDelaySeconds: 5
+              periodSeconds: 5
+
+---
+# OPA (Open Policy Agent) for Policy Enforcement
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opa-policies
+  namespace: opa-system
+data:
+  policies.rego: |
+    package kubernetes.admission
+    
+    import data.kubernetes.namespaces
+    
+    # Deny containers without resource limits
+    deny[msg] {
+      input.request.kind.kind == "Pod"
+      container := input.request.object.spec.containers[_]
+      not container.resources.limits
+      msg := sprintf("Container %v is missing resource limits", [container.name])
+    }
+    
+    # Deny containers running as root
+    deny[msg] {
+      input.request.kind.kind == "Pod"
+      container := input.request.object.spec.containers[_]
+      container.securityContext.runAsUser == 0
+      msg := sprintf("Container %v cannot run as root", [container.name])
+    }
+    
+    # Deny containers with privileged access
+    deny[msg] {
+      input.request.kind.kind == "Pod"
+      container := input.request.object.spec.containers[_]
+      container.securityContext.privileged == true
+      msg := sprintf("Container %v cannot run in privileged mode", [container.name])
+    }
+    
+    # Require specific labels
+    deny[msg] {
+      input.request.kind.kind == "Pod"
+      required := {"app", "version", "team", "environment"}
+      provided := input.request.object.metadata.labels
+      missing := required - {label | provided[label]}
+      count(missing) > 0
+      msg := sprintf("Pod is missing required labels: %v", [missing])
+    }
+    
+    # Enforce image registry whitelist
+    deny[msg] {
+      input.request.kind.kind == "Pod"
+      container := input.request.object.spec.containers[_]
+      not starts_with(container.image, "acrrbcdev.azurecr.io/")
+      not starts_with(container.image, "mcr.microsoft.com/")
+      msg := sprintf("Container %v uses unauthorized image registry", [container.name])
+    }

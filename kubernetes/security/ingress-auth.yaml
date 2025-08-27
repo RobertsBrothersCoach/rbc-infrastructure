@@ -1,0 +1,213 @@
+# Authentication and Authorization for Ingress Resources
+# Implements OAuth2, Basic Auth, and IP Whitelisting
+
+---
+# OAuth2 Proxy for Azure AD authentication
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: oauth2-proxy
+  labels:
+    name: oauth2-proxy
+
+---
+# OAuth2 Proxy Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oauth2-proxy-config
+  namespace: oauth2-proxy
+data:
+  oauth2-proxy.cfg: |
+    # Azure AD Configuration
+    provider = "azure"
+    azure_tenant = "2bf8eca0-5705-47f9-bad9-10a86ef58a19"
+    client_id = "${OAUTH2_CLIENT_ID}"
+    client_secret = "${OAUTH2_CLIENT_SECRET}"
+    
+    # Cookie settings
+    cookie_secret = "${COOKIE_SECRET}"
+    cookie_secure = true
+    cookie_httponly = true
+    cookie_expire = "168h"
+    cookie_refresh = "60m"
+    
+    # Session settings
+    session_store_type = "cookie"
+    
+    # Proxy settings
+    email_domains = [ "rbccoach.com" ]
+    upstreams = [ "file:///dev/null" ]
+    http_address = "0.0.0.0:4180"
+    https_address = ":443"
+    
+    # Security
+    skip_auth_regex = [
+      "^/health",
+      "^/metrics"
+    ]
+    
+    # Azure AD Groups (for RBAC)
+    azure_groups = [
+      "rbc-developers",
+      "rbc-infrastructure-admins"
+    ]
+    
+    # Logging
+    standard_logging = true
+    auth_logging = true
+    request_logging = true
+
+---
+# OAuth2 Proxy Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oauth2-proxy
+  namespace: oauth2-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: oauth2-proxy
+  template:
+    metadata:
+      labels:
+        app: oauth2-proxy
+    spec:
+      containers:
+      - name: oauth2-proxy
+        image: quay.io/oauth2-proxy/oauth2-proxy:v7.5.0
+        args:
+        - --config=/etc/oauth2-proxy/oauth2-proxy.cfg
+        ports:
+        - containerPort: 4180
+          name: http
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        volumeMounts:
+        - name: config
+          mountPath: /etc/oauth2-proxy
+        livenessProbe:
+          httpGet:
+            path: /ping
+            port: http
+          initialDelaySeconds: 10
+          timeoutSeconds: 1
+        readinessProbe:
+          httpGet:
+            path: /ping
+            port: http
+          initialDelaySeconds: 10
+          timeoutSeconds: 1
+      volumes:
+      - name: config
+        configMap:
+          name: oauth2-proxy-config
+
+---
+# OAuth2 Proxy Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: oauth2-proxy
+  namespace: oauth2-proxy
+spec:
+  selector:
+    app: oauth2-proxy
+  ports:
+  - name: http
+    port: 4180
+    targetPort: http
+
+---
+# Basic Auth Secret (fallback authentication)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: basic-auth
+  namespace: default
+type: Opaque
+data:
+  # admin:$2y$10$... (bcrypt hash)
+  # Generate with: htpasswd -nb admin yourpassword | base64
+  auth: YWRtaW46JDJ5JDEwJDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MA==
+
+---
+# IP Whitelist ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ip-whitelist
+  namespace: default
+data:
+  # Office/VPN IPs - Update with your actual IPs
+  whitelist.cidr: |
+    10.0.0.0/8      # Internal network
+    172.16.0.0/12   # Internal network
+    192.168.0.0/16  # Internal network
+    # Add your office/VPN IPs here:
+    # 203.0.113.0/24  # Example office IP range
+    
+---
+# Example: Protected Service with Multiple Auth Methods
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: protected-app
+  namespace: default
+  annotations:
+    # nginx-ingress controller
+    kubernetes.io/ingress.class: nginx
+    
+    # SSL Configuration
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    
+    # Authentication Options (choose one or combine):
+    
+    # Option 1: OAuth2 with Azure AD
+    nginx.ingress.kubernetes.io/auth-url: "https://auth.cloud.rbccoach.com/oauth2/auth"
+    nginx.ingress.kubernetes.io/auth-signin: "https://auth.cloud.rbccoach.com/oauth2/start?rd=$scheme://$host$request_uri"
+    
+    # Option 2: Basic Authentication (backup)
+    # nginx.ingress.kubernetes.io/auth-type: basic
+    # nginx.ingress.kubernetes.io/auth-secret: basic-auth
+    # nginx.ingress.kubernetes.io/auth-realm: 'Authentication Required'
+    
+    # Option 3: IP Whitelisting
+    nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    
+    # Rate Limiting
+    nginx.ingress.kubernetes.io/limit-rps: "10"
+    nginx.ingress.kubernetes.io/limit-connections: "10"
+    
+    # Security Headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+      
+spec:
+  tls:
+  - hosts:
+    - app-dev.cloud.rbccoach.com
+    secretName: app-tls
+  rules:
+  - host: app-dev.cloud.rbccoach.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app-service
+            port:
+              number: 80

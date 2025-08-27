@@ -1,0 +1,157 @@
+# Kubernetes RBAC (Role-Based Access Control) Policies
+# Maps Azure AD groups to Kubernetes roles
+
+---
+# Developer Role - Limited access
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: developer-role
+rules:
+# Read access to most resources
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps", "secrets"]
+  verbs: ["get", "list", "watch"]
+# Execute into pods for debugging
+- apiGroups: [""]
+  resources: ["pods/exec", "pods/log", "pods/portforward"]
+  verbs: ["create", "get"]
+# Read deployments and replicasets
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "statefulsets"]
+  verbs: ["get", "list", "watch"]
+# Read ingresses
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["get", "list", "watch"]
+
+---
+# Admin Role - Full access to specific namespaces
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: namespace-admin-role
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+
+---
+# Security Admin Role - Security-focused permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: security-admin-role
+rules:
+# Network policies
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies"]
+  verbs: ["*"]
+# Pod security policies
+- apiGroups: ["policy"]
+  resources: ["podsecuritypolicies", "poddisruptionbudgets"]
+  verbs: ["*"]
+# RBAC management
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+  verbs: ["*"]
+# Secrets management
+- apiGroups: [""]
+  resources: ["secrets", "serviceaccounts"]
+  verbs: ["*"]
+
+---
+# Bind Azure AD group "rbc-developers" to developer role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: azure-ad-developers
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: developer-role
+subjects:
+- kind: Group
+  name: "rbc-developers"  # Azure AD group
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Bind Azure AD group "rbc-infrastructure-admins" to admin role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: azure-ad-admins
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: Group
+  name: "rbc-infrastructure-admins"  # Azure AD group
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Service Account for ArgoCD
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: argocd-manager
+  namespace: argocd
+
+---
+# ArgoCD permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: argocd-manager-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin  # ArgoCD needs cluster-admin for GitOps
+subjects:
+- kind: ServiceAccount
+  name: argocd-manager
+  namespace: argocd
+
+---
+# Namespace-specific permissions for dev team
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dev-team-binding
+  namespace: development
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: namespace-admin-role
+subjects:
+- kind: Group
+  name: "rbc-dev-team"  # Azure AD group
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Read-only access for auditors
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: auditor-role
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["get", "list", "watch"]
+- nonResourceURLs: ["*"]
+  verbs: ["get"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: azure-ad-auditors
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: auditor-role
+subjects:
+- kind: Group
+  name: "rbc-auditors"  # Azure AD group
+  apiGroup: rbac.authorization.k8s.io
