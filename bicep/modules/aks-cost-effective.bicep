@@ -30,7 +30,7 @@ resource aksCluster 'Microsoft.ContainerService/managedClusters@2024-02-01' = {
     type: 'SystemAssigned'
   }
   properties: {
-    kubernetesVersion: '1.29.4' // Stable version
+    kubernetesVersion: '1.28.9' // Stable non-LTS version
     dnsPrefix: 'rbc-${environmentName}'
     
     // Cost-effective agent pool
