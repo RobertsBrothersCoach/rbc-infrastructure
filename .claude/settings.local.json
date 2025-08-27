@@ -16,7 +16,8 @@
       "Bash(gh run list:*)",
       "Bash(gh run view:*)",
       "Bash(gh workflow run:*)",
-      "Bash(gh workflow:*)"
+      "Bash(gh workflow:*)",
+      "Bash(gh run watch:*)"
     ],
     "deny": [],
     "ask": []
