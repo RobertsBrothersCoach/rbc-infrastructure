@@ -1,0 +1,43 @@
+name: Infrastructure Deployment Simple
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+jobs:
+  deploy:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event.inputs.environment == 'dev' && 'development' || github.event.inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS_DEV }}
+      
+      - name: Validate Bicep
+        run: |
+          az bicep build --file bicep/main.bicep
+      
+      - name: Deploy Infrastructure
+        run: |
+          echo "Deploying to ${{ github.event.inputs.environment }}"
+          az deployment sub create \
+            --location eastus2 \
+            --template-file bicep/main.bicep \
+            --parameters bicep/environments/${{ github.event.inputs.environment }}.parameters.json \
+            --parameters administratorPassword="${{ secrets.POSTGRES_ADMIN_PASSWORD_DEV }}" \
+            --name ${{ github.event.inputs.environment }}-${{ github.run_number }} \
+            --what-if
