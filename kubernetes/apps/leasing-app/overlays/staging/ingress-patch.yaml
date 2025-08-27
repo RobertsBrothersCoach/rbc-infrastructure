@@ -1,0 +1,33 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: leasing-app-ingress
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+  - hosts:
+    - staging.yourdomain.com
+    - api-staging.yourdomain.com
+    secretName: leasing-app-staging-tls
+  rules:
+  - host: staging.yourdomain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: staging-leasing-app-frontend
+            port:
+              number: 80
+  - host: api-staging.yourdomain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: staging-leasing-app-backend
+            port:
+              number: 5000

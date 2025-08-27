@@ -1,0 +1,230 @@
+// Tour Bus Leasing - KQL Monitoring Queries
+// These queries are used for monitoring, alerting, and dashboards
+
+// ========================================
+// PERFORMANCE MONITORING
+// ========================================
+
+// API Response Time Analysis
+requests
+| where timestamp > ago(1h)
+| summarize 
+    avg_duration = avg(duration),
+    p50 = percentile(duration, 50),
+    p95 = percentile(duration, 95),
+    p99 = percentile(duration, 99),
+    request_count = count()
+  by bin(timestamp, 5m), name
+| render timechart
+
+// Slow Queries Detection
+dependencies
+| where timestamp > ago(1h)
+| where type == "SQL"
+| where duration > 1000 // Queries taking more than 1 second
+| project timestamp, name, duration, data, success
+| order by duration desc
+| take 20
+
+// Container App Scaling Events
+ContainerAppSystemLogs_CL
+| where TimeGenerated > ago(1h)
+| where Log_s contains "Scaling"
+| project TimeGenerated, ContainerAppName_s, Log_s
+| order by TimeGenerated desc
+
+// ========================================
+// ERROR MONITORING
+// ========================================
+
+// Application Errors by Type
+exceptions
+| where timestamp > ago(24h)
+| summarize error_count = count() by type, outerMessage
+| order by error_count desc
+| take 20
+
+// Failed Requests by Endpoint
+requests
+| where timestamp > ago(1h)
+| where success == false
+| summarize failure_count = count(), failure_rate = (countif(success == false) * 100.0 / count()) 
+  by name, resultCode
+| where failure_count > 5
+| order by failure_count desc
+
+// Database Connection Failures
+traces
+| where timestamp > ago(1h)
+| where message contains "database" and (message contains "failed" or message contains "error")
+| project timestamp, message, severityLevel, customDimensions
+| order by timestamp desc
+
+// ========================================
+// SECURITY & PII MONITORING
+// ========================================
+
+// PII Access Audit Trail
+customEvents
+| where timestamp > ago(24h)
+| where name == "PiiAccess"
+| extend 
+    UserId = tostring(customDimensions["UserId"]),
+    Action = tostring(customDimensions["Action"]),
+    ResourceType = tostring(customDimensions["ResourceType"]),
+    ResourceId = tostring(customDimensions["ResourceId"]),
+    IpAddress = tostring(customDimensions["IpAddress"])
+| project timestamp, UserId, Action, ResourceType, ResourceId, IpAddress
+| order by timestamp desc
+
+// Suspicious PII Access Patterns
+customEvents
+| where timestamp > ago(1h)
+| where name == "PiiAccess"
+| extend UserId = tostring(customDimensions["UserId"])
+| summarize access_count = count() by UserId, bin(timestamp, 5m)
+| where access_count > 50 // More than 50 PII accesses in 5 minutes
+| order by access_count desc
+
+// Failed Authentication Attempts
+customEvents
+| where timestamp > ago(1h)
+| where name == "AuthenticationFailed"
+| extend 
+    UserEmail = tostring(customDimensions["UserEmail"]),
+    IpAddress = tostring(customDimensions["IpAddress"]),
+    Reason = tostring(customDimensions["Reason"])
+| summarize attempt_count = count() by UserEmail, IpAddress
+| where attempt_count > 5 // More than 5 failed attempts
+| order by attempt_count desc
+
+// ========================================
+// BUSINESS METRICS
+// ========================================
+
+// Booking Creation Rate
+customEvents
+| where timestamp > ago(24h)
+| where name == "BookingCreated"
+| summarize bookings = count() by bin(timestamp, 1h)
+| render timechart
+
+// Revenue Tracking
+customEvents
+| where timestamp > ago(7d)
+| where name == "PaymentProcessed"
+| extend Amount = todouble(customDimensions["Amount"])
+| summarize total_revenue = sum(Amount) by bin(timestamp, 1d)
+| render columnchart
+
+// User Activity Summary
+pageViews
+| where timestamp > ago(24h)
+| summarize 
+    unique_users = dcount(user_Id),
+    total_pageviews = count(),
+    avg_duration = avg(duration)
+  by bin(timestamp, 1h)
+| render timechart
+
+// ========================================
+// INFRASTRUCTURE MONITORING
+// ========================================
+
+// Container Memory Usage
+performanceCounters
+| where timestamp > ago(1h)
+| where name == "Memory Available Bytes"
+| extend memory_gb = value / 1024 / 1024 / 1024
+| summarize avg_memory = avg(memory_gb), max_memory = max(memory_gb) 
+  by bin(timestamp, 5m), cloud_RoleInstance
+| render timechart
+
+// Container CPU Usage
+performanceCounters
+| where timestamp > ago(1h)
+| where name == "Processor(_Total)\\% Processor Time"
+| summarize avg_cpu = avg(value), max_cpu = max(value) 
+  by bin(timestamp, 5m), cloud_RoleInstance
+| render timechart
+
+// Redis Cache Performance
+dependencies
+| where timestamp > ago(1h)
+| where type == "Redis"
+| summarize 
+    avg_duration = avg(duration),
+    cache_hits = countif(success == true),
+    cache_misses = countif(success == false),
+    hit_rate = (countif(success == true) * 100.0 / count())
+  by bin(timestamp, 5m)
+| render timechart
+
+// ========================================
+// AVAILABILITY MONITORING
+// ========================================
+
+// Service Availability
+availabilityResults
+| where timestamp > ago(24h)
+| summarize 
+    availability_percentage = (countif(success == true) * 100.0 / count()),
+    total_tests = count(),
+    failed_tests = countif(success == false)
+  by location, name
+| order by availability_percentage asc
+
+// Endpoint Health Status
+requests
+| where timestamp > ago(1h)
+| where name == "GET /health"
+| summarize 
+    health_checks = count(),
+    healthy = countif(resultCode == 200),
+    unhealthy = countif(resultCode != 200)
+  by bin(timestamp, 5m), cloud_RoleInstance
+| extend health_percentage = (healthy * 100.0 / health_checks)
+| render timechart
+
+// ========================================
+// COST OPTIMIZATION
+// ========================================
+
+// Request Volume by Environment
+requests
+| where timestamp > ago(7d)
+| extend environment = tostring(customDimensions["Environment"])
+| summarize request_count = count() by environment, bin(timestamp, 1d)
+| render columnchart
+
+// Storage Usage Trends
+customMetrics
+| where timestamp > ago(30d)
+| where name == "StorageUsageGB"
+| summarize avg_storage = avg(value), max_storage = max(value) 
+  by bin(timestamp, 1d)
+| render timechart
+
+// ========================================
+// ALERTING QUERIES
+// ========================================
+
+// Alert: High Error Rate
+exceptions
+| where timestamp > ago(15m)
+| summarize error_count = count()
+| extend alert = iff(error_count > 50, "CRITICAL", "OK")
+
+// Alert: Database Connection Pool Exhaustion
+dependencies
+| where timestamp > ago(5m)
+| where type == "SQL"
+| where success == false and data contains "connection pool"
+| count
+
+// Alert: PII Access Spike
+customEvents
+| where timestamp > ago(15m)
+| where name == "PiiAccess"
+| summarize access_count = count()
+| extend alert = iff(access_count > 500, "INVESTIGATE", "NORMAL")

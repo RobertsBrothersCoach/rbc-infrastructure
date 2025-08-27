@@ -1,0 +1,266 @@
+# Azure Load Testing Configuration for RBC Leasing App
+# This configuration file defines load testing scenarios to validate auto-scaling behavior
+#
+# Environment Variables:
+#   TEST_DOMAIN - Domain name for test email addresses (default: loadtest.com)
+#   TEST_PHONE_PREFIX - Phone number prefix for test data (default: 555)
+
+testName: RBC-Leasing-App-Load-Test
+testDescription: Comprehensive load testing to validate auto-scaling configurations
+engineInstances: 1
+
+# Test Plans for different scenarios
+testPlans:
+  - name: baseline-load
+    description: Baseline load test to establish performance benchmarks
+    duration: 10m
+    rampUpTime: 2m
+    users: 50
+    scenarios:
+      - name: browse-buses
+        weight: 40
+        requests:
+          - url: ${BASE_URL}/api/buses
+            method: GET
+            headers:
+              Accept: application/json
+          - url: ${BASE_URL}/api/buses/available
+            method: GET
+            queryParams:
+              startDate: ${START_DATE}
+              endDate: ${END_DATE}
+
+      - name: customer-operations
+        weight: 30
+        requests:
+          - url: ${BASE_URL}/api/auth/login
+            method: POST
+            body:
+              email: ${USER_EMAIL}
+              password: ${USER_PASSWORD}
+          - url: ${BASE_URL}/api/customers/profile
+            method: GET
+            headers:
+              Authorization: Bearer ${ACCESS_TOKEN}
+
+      - name: booking-flow
+        weight: 30
+        requests:
+          - url: ${BASE_URL}/api/bookings
+            method: POST
+            headers:
+              Authorization: Bearer ${ACCESS_TOKEN}
+            body:
+              busId: ${BUS_ID}
+              startDate: ${START_DATE}
+              endDate: ${END_DATE}
+              totalAmount: ${TOTAL_AMOUNT}
+
+  - name: spike-test
+    description: Spike test to validate auto-scaling response to sudden load increases
+    duration: 15m
+    phases:
+      - duration: 2m
+        targetUsers: 10
+      - duration: 1m
+        targetUsers: 200  # Sudden spike
+      - duration: 5m
+        targetUsers: 200  # Sustained high load
+      - duration: 2m
+        targetUsers: 50   # Gradual decrease
+      - duration: 5m
+        targetUsers: 10   # Return to baseline
+
+  - name: stress-test
+    description: Stress test to find system breaking points
+    duration: 30m
+    phases:
+      - duration: 5m
+        targetUsers: 50
+      - duration: 5m
+        targetUsers: 100
+      - duration: 5m
+        targetUsers: 200
+      - duration: 5m
+        targetUsers: 400
+      - duration: 5m
+        targetUsers: 600
+      - duration: 5m
+        targetUsers: 800
+
+  - name: endurance-test
+    description: Long-running test to validate sustained performance
+    duration: 2h
+    targetUsers: 100
+    scenarios:
+      - name: mixed-operations
+        requests:
+          - url: ${BASE_URL}/api/buses
+            method: GET
+            weight: 30
+          - url: ${BASE_URL}/api/bookings
+            method: GET
+            weight: 25
+          - url: ${BASE_URL}/api/customers
+            method: GET
+            weight: 20
+          - url: ${BASE_URL}/api/contracts
+            method: GET
+            weight: 15
+          - url: ${BASE_URL}/api/auth/refresh
+            method: POST
+            weight: 10
+
+# Performance Criteria
+criteria:
+  - metric: response_time_95th_percentile
+    aggregate: p95
+    condition: "<"
+    value: 2000  # milliseconds
+    
+  - metric: response_time_99th_percentile
+    aggregate: p99
+    condition: "<"
+    value: 5000  # milliseconds
+    
+  - metric: error_rate
+    aggregate: percentage
+    condition: "<"
+    value: 1  # percent
+    
+  - metric: requests_per_second
+    aggregate: avg
+    condition: ">"
+    value: 100
+
+# Environment-specific configurations
+environments:
+  dev:
+    baseUrl: https://rbc-leasing-dev.azurewebsites.net
+    maxUsers: 100
+    testData:
+      users: load-test-users-dev.csv
+      buses: load-test-buses-dev.csv
+    
+  qa:
+    baseUrl: https://rbc-leasing-qa.azurewebsites.net
+    maxUsers: 300
+    testData:
+      users: load-test-users-qa.csv
+      buses: load-test-buses-qa.csv
+    
+  prod:
+    baseUrl: https://rbc-leasing.azurewebsites.net
+    maxUsers: 1000
+    testData:
+      users: load-test-users-prod.csv
+      buses: load-test-buses-prod.csv
+
+# Monitoring Integration
+monitoring:
+  applicationInsights:
+    instrumentationKey: ${APPINSIGHTS_KEY}
+    trackDependencies: true
+    trackExceptions: true
+    
+  customMetrics:
+    - name: scaling_events
+      query: "customEvents | where name == 'AutoScaleEvent' | count"
+    - name: instance_count
+      query: "performanceCounters | where name == 'Instance Count' | avg(value)"
+    - name: database_connections
+      query: "dependencies | where type == 'SQL' | count"
+
+# Load Patterns for different times
+loadPatterns:
+  businessHours:
+    schedule: "0 9-17 * * MON-FRI"
+    multiplier: 1.5
+    
+  peakHours:
+    schedule: "0 10-12,14-16 * * MON-FRI"
+    multiplier: 2.0
+    
+  offHours:
+    schedule: "0 18-8 * * *"
+    multiplier: 0.3
+    
+  weekend:
+    schedule: "0 * * * SAT,SUN"
+    multiplier: 0.5
+
+# Data Generation Rules
+dataGeneration:
+  customers:
+    count: 1000
+    template:
+      email: "test${INDEX}@${TEST_DOMAIN:loadtest.com}"
+      firstName: "Test${INDEX}"
+      lastName: "User${INDEX}"
+      phone: "${TEST_PHONE_PREFIX:555}-${RANDOM:1000-9999}"
+      
+  bookings:
+    count: 500
+    distribution:
+      daily: 40%
+      weekly: 35%
+      monthly: 25%
+    dateRange:
+      start: "+1d"
+      end: "+90d"
+
+# Assertions for auto-scaling validation
+assertions:
+  - name: scale_out_response_time
+    description: "Verify scale-out occurs within 5 minutes of threshold breach"
+    condition: "When CPU > 70% for 5 minutes, instance count increases within 5 minutes"
+    
+  - name: scale_in_cooldown
+    description: "Verify scale-in respects cooldown period"
+    condition: "After scale-out, no scale-in occurs for at least 10 minutes"
+    
+  - name: max_instances_limit
+    description: "Verify maximum instance limit is respected"
+    condition: "Instance count never exceeds configured maximum"
+    
+  - name: performance_during_scaling
+    description: "Verify acceptable performance during scaling operations"
+    condition: "95th percentile response time < 3000ms during scaling events"
+
+# Reporting Configuration
+reporting:
+  format: 
+    - html
+    - pdf
+    - json
+  
+  metrics:
+    - responseTime
+    - throughput
+    - errorRate
+    - concurrentUsers
+    - instanceCount
+    - cpuUsage
+    - memoryUsage
+    
+  charts:
+    - type: timeseries
+      metrics: [responseTime, instanceCount]
+    - type: histogram
+      metrics: [responseTime]
+    - type: scatter
+      x: concurrentUsers
+      y: responseTime
+      
+  notifications:
+    email:
+      recipients:
+        - devops@rbcleasing.com
+        - qa@rbcleasing.com
+      onComplete: true
+      onFailure: true
+    
+    teams:
+      webhook: ${TEAMS_WEBHOOK_URL}
+      onComplete: true
+      onFailure: true

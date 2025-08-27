@@ -1,0 +1,181 @@
+# Azure Load Testing configuration for auto-scaling validation
+# Tests scaling behavior under various load patterns
+
+version: v0.1
+testName: TourBus Auto-Scaling Validation
+testDescription: Validates auto-scaling configuration for all services
+engineInstances: 4
+
+# Test scenarios configuration
+testScenarios:
+  - scenarioName: Gradual Ramp Test
+    description: Gradually increase load from 0 to 500 users over 30 minutes
+    duration: 1800 # 30 minutes in seconds
+    virtualUsers:
+      rampUp:
+        duration: 900 # 15 minutes
+        targetUsers: 500
+      sustain:
+        duration: 600 # 10 minutes
+      rampDown:
+        duration: 300 # 5 minutes
+    
+  - scenarioName: Spike Test
+    description: Sudden spike from 50 to 300 users
+    duration: 900 # 15 minutes
+    virtualUsers:
+      initial: 50
+      spike:
+        atTime: 60 # Spike at 1 minute
+        targetUsers: 300
+      sustain:
+        duration: 720 # 12 minutes
+      
+  - scenarioName: Sustained Load Test
+    description: Maintain 200 concurrent users for 2 hours
+    duration: 7200 # 2 hours
+    virtualUsers:
+      constant: 200
+      
+  - scenarioName: Scale Down Test
+    description: Test scale-down behavior from 500 to 0 users
+    duration: 1200 # 20 minutes
+    virtualUsers:
+      initial: 500
+      rampDown:
+        duration: 600 # 10 minutes
+        targetUsers: 0
+      observe:
+        duration: 600 # 10 minutes to observe scale-down
+
+# Load test script configuration
+testScript: |
+  import http from 'k6/http';
+  import { check, sleep } from 'k6';
+  import { Rate } from 'k6/metrics';
+  
+  const errorRate = new Rate('errors');
+  const BASE_URL = __ENV.BASE_URL || 'https://tourbus-app.azurewebsites.net';
+  
+  export let options = {
+    scenarios: {
+      gradual_ramp: {
+        executor: 'ramping-vus',
+        startVUs: 0,
+        stages: [
+          { duration: '15m', target: 500 },
+          { duration: '10m', target: 500 },
+          { duration: '5m', target: 0 },
+        ],
+      },
+      spike_test: {
+        executor: 'ramping-vus',
+        startVUs: 50,
+        stages: [
+          { duration: '1m', target: 50 },
+          { duration: '10s', target: 300 },
+          { duration: '12m', target: 300 },
+          { duration: '2m', target: 50 },
+        ],
+      },
+    },
+    thresholds: {
+      http_req_duration: ['p(95)<500'], // 95% of requests under 500ms
+      http_req_failed: ['rate<0.1'], // Error rate under 10%
+      errors: ['rate<0.1'],
+    },
+  };
+  
+  export default function () {
+    // Test homepage
+    let homeRes = http.get(`${BASE_URL}/`);
+    check(homeRes, {
+      'homepage status is 200': (r) => r.status === 200,
+      'homepage response time < 500ms': (r) => r.timings.duration < 500,
+    });
+    errorRate.add(homeRes.status !== 200);
+    
+    sleep(1);
+    
+    // Test API endpoint
+    let apiRes = http.get(`${BASE_URL}/api/buses`);
+    check(apiRes, {
+      'API status is 200': (r) => r.status === 200,
+      'API response time < 1000ms': (r) => r.timings.duration < 1000,
+    });
+    errorRate.add(apiRes.status !== 200);
+    
+    sleep(Math.random() * 3 + 1);
+    
+    // Test search functionality
+    let searchRes = http.get(`${BASE_URL}/api/buses/search?capacity=50`);
+    check(searchRes, {
+      'search status is 200': (r) => r.status === 200,
+      'search response time < 1500ms': (r) => r.timings.duration < 1500,
+    });
+    errorRate.add(searchRes.status !== 200);
+    
+    sleep(Math.random() * 2 + 1);
+  }
+
+# Monitoring configuration
+monitoring:
+  metrics:
+    - metricName: Instance Count
+      resourceType: Microsoft.Web/sites
+      aggregation: Average
+      
+    - metricName: CPU Percentage
+      resourceType: Microsoft.Web/serverfarms
+      aggregation: Average
+      
+    - metricName: Memory Percentage
+      resourceType: Microsoft.Web/serverfarms
+      aggregation: Average
+      
+    - metricName: Http Queue Length
+      resourceType: Microsoft.Web/serverfarms
+      aggregation: Average
+      
+    - metricName: Response Time
+      resourceType: Microsoft.Web/sites
+      aggregation: Average
+      
+    - metricName: Requests
+      resourceType: Microsoft.Web/sites
+      aggregation: Total
+      
+    - metricName: Http 5xx
+      resourceType: Microsoft.Web/sites
+      aggregation: Total
+
+# Success criteria
+successCriteria:
+  - metric: responseTime
+    aggregate: p95
+    condition: "<"
+    value: 500
+    
+  - metric: errorRate
+    aggregate: avg
+    condition: "<"
+    value: 0.1
+    
+  - metric: throughput
+    aggregate: min
+    condition: ">"
+    value: 100
+    
+  - metric: scaleLatency
+    aggregate: max
+    condition: "<"
+    value: 300 # Scale out within 5 minutes
+
+# Test environment configuration
+environment:
+  - name: BASE_URL
+    value: "https://tourbus-app.azurewebsites.net"
+  - name: API_KEY
+    value: "${SECRET_API_KEY}"
+  - name: ENVIRONMENT
+    value: "qa"

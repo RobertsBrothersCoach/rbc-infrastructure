@@ -1,0 +1,284 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "appServicePlanName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the App Service Plan to configure auto-scaling for"
+      }
+    },
+    "environmentName": {
+      "type": "string",
+      "allowedValues": ["dev", "qa", "prod"],
+      "metadata": {
+        "description": "Environment name"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for the auto-scale settings"
+      }
+    }
+  },
+  "variables": {
+    "autoScaleSettingsName": "[concat('autoscale-', parameters('appServicePlanName'))]",
+    "targetResourceId": "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
+    "scaleConfigs": {
+      "dev": {
+        "minInstances": 1,
+        "maxInstances": 2,
+        "defaultInstances": 1,
+        "cpuThreshold": 80,
+        "memoryThreshold": 80,
+        "scaleOutCooldown": "PT5M",
+        "scaleInCooldown": "PT10M"
+      },
+      "qa": {
+        "minInstances": 1,
+        "maxInstances": 3,
+        "defaultInstances": 1,
+        "cpuThreshold": 75,
+        "memoryThreshold": 75,
+        "scaleOutCooldown": "PT5M",
+        "scaleInCooldown": "PT10M"
+      },
+      "prod": {
+        "minInstances": 1,
+        "maxInstances": 10,
+        "defaultInstances": 2,
+        "cpuThreshold": 70,
+        "memoryThreshold": 70,
+        "scaleOutCooldown": "PT10M",
+        "scaleInCooldown": "PT15M"
+      }
+    },
+    "currentConfig": "[variables('scaleConfigs')[parameters('environmentName')]]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/autoscalesettings",
+      "apiVersion": "2022-10-01",
+      "name": "[variables('autoScaleSettingsName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "enabled": true,
+        "targetResourceUri": "[variables('targetResourceId')]",
+        "profiles": [
+          {
+            "name": "Auto scale based on CPU and Memory",
+            "capacity": {
+              "minimum": "[variables('currentConfig').minInstances]",
+              "maximum": "[variables('currentConfig').maxInstances]",
+              "default": "[variables('currentConfig').defaultInstances]"
+            },
+            "rules": [
+              {
+                "metricTrigger": {
+                  "metricName": "CpuPercentage",
+                  "metricNamespace": "microsoft.web/serverfarms",
+                  "metricResourceUri": "[variables('targetResourceId')]",
+                  "timeGrain": "PT1M",
+                  "statistic": "Average",
+                  "timeWindow": "PT5M",
+                  "timeAggregation": "Average",
+                  "operator": "GreaterThan",
+                  "threshold": "[variables('currentConfig').cpuThreshold]"
+                },
+                "scaleAction": {
+                  "direction": "Increase",
+                  "type": "ChangeCount",
+                  "value": "1",
+                  "cooldown": "[variables('currentConfig').scaleOutCooldown]"
+                }
+              },
+              {
+                "metricTrigger": {
+                  "metricName": "CpuPercentage",
+                  "metricNamespace": "microsoft.web/serverfarms",
+                  "metricResourceUri": "[variables('targetResourceId')]",
+                  "timeGrain": "PT1M",
+                  "statistic": "Average",
+                  "timeWindow": "PT10M",
+                  "timeAggregation": "Average",
+                  "operator": "LessThan",
+                  "threshold": 30
+                },
+                "scaleAction": {
+                  "direction": "Decrease",
+                  "type": "ChangeCount",
+                  "value": "1",
+                  "cooldown": "[variables('currentConfig').scaleInCooldown]"
+                }
+              },
+              {
+                "metricTrigger": {
+                  "metricName": "MemoryPercentage",
+                  "metricNamespace": "microsoft.web/serverfarms",
+                  "metricResourceUri": "[variables('targetResourceId')]",
+                  "timeGrain": "PT1M",
+                  "statistic": "Average",
+                  "timeWindow": "PT5M",
+                  "timeAggregation": "Average",
+                  "operator": "GreaterThan",
+                  "threshold": "[variables('currentConfig').memoryThreshold]"
+                },
+                "scaleAction": {
+                  "direction": "Increase",
+                  "type": "ChangeCount",
+                  "value": "1",
+                  "cooldown": "[variables('currentConfig').scaleOutCooldown]"
+                }
+              },
+              {
+                "metricTrigger": {
+                  "metricName": "MemoryPercentage",
+                  "metricNamespace": "microsoft.web/serverfarms",
+                  "metricResourceUri": "[variables('targetResourceId')]",
+                  "timeGrain": "PT1M",
+                  "statistic": "Average",
+                  "timeWindow": "PT10M",
+                  "timeAggregation": "Average",
+                  "operator": "LessThan",
+                  "threshold": 40
+                },
+                "scaleAction": {
+                  "direction": "Decrease",
+                  "type": "ChangeCount",
+                  "value": "1",
+                  "cooldown": "[variables('currentConfig').scaleInCooldown]"
+                }
+              },
+              {
+                "metricTrigger": {
+                  "metricName": "HttpQueueLength",
+                  "metricNamespace": "microsoft.web/serverfarms",
+                  "metricResourceUri": "[variables('targetResourceId')]",
+                  "timeGrain": "PT1M",
+                  "statistic": "Average",
+                  "timeWindow": "PT5M",
+                  "timeAggregation": "Average",
+                  "operator": "GreaterThan",
+                  "threshold": 10
+                },
+                "scaleAction": {
+                  "direction": "Increase",
+                  "type": "ChangeCount",
+                  "value": "2",
+                  "cooldown": "PT3M"
+                }
+              }
+            ]
+          },
+          {
+            "name": "Weekend scale down profile",
+            "capacity": {
+              "minimum": "[if(equals(parameters('environmentName'), 'prod'), 1, 0)]",
+              "maximum": "[if(equals(parameters('environmentName'), 'prod'), 3, 1)]",
+              "default": "[if(equals(parameters('environmentName'), 'prod'), 1, 0)]"
+            },
+            "rules": [],
+            "recurrence": {
+              "frequency": "Week",
+              "schedule": {
+                "timeZone": "Eastern Standard Time",
+                "days": ["Saturday", "Sunday"],
+                "hours": [0],
+                "minutes": [0]
+              }
+            }
+          },
+          {
+            "name": "Night time scale down profile",
+            "capacity": {
+              "minimum": "[if(equals(parameters('environmentName'), 'prod'), 1, 0)]",
+              "maximum": "[if(equals(parameters('environmentName'), 'prod'), 2, 1)]",
+              "default": "[if(equals(parameters('environmentName'), 'prod'), 1, 0)]"
+            },
+            "rules": [],
+            "recurrence": {
+              "frequency": "Day",
+              "schedule": {
+                "timeZone": "Eastern Standard Time",
+                "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+                "hours": [20],
+                "minutes": [0]
+              }
+            }
+          },
+          {
+            "name": "Business hours scale up profile",
+            "capacity": {
+              "minimum": "[variables('currentConfig').minInstances]",
+              "maximum": "[variables('currentConfig').maxInstances]",
+              "default": "[variables('currentConfig').defaultInstances]"
+            },
+            "rules": [
+              {
+                "metricTrigger": {
+                  "metricName": "CpuPercentage",
+                  "metricNamespace": "microsoft.web/serverfarms",
+                  "metricResourceUri": "[variables('targetResourceId')]",
+                  "timeGrain": "PT1M",
+                  "statistic": "Average",
+                  "timeWindow": "PT5M",
+                  "timeAggregation": "Average",
+                  "operator": "GreaterThan",
+                  "threshold": "[sub(variables('currentConfig').cpuThreshold, 10)]"
+                },
+                "scaleAction": {
+                  "direction": "Increase",
+                  "type": "ChangeCount",
+                  "value": "1",
+                  "cooldown": "PT3M"
+                }
+              }
+            ],
+            "recurrence": {
+              "frequency": "Day",
+              "schedule": {
+                "timeZone": "Eastern Standard Time",
+                "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+                "hours": [7],
+                "minutes": [0]
+              }
+            }
+          }
+        ],
+        "notifications": [
+          {
+            "operation": "Scale",
+            "email": {
+              "sendToSubscriptionAdministrator": true,
+              "sendToSubscriptionCoAdministrators": true,
+              "customEmails": []
+            },
+            "webhooks": []
+          }
+        ]
+      }
+    }
+  ],
+  "outputs": {
+    "autoScaleSettingsId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Insights/autoscalesettings', variables('autoScaleSettingsName'))]"
+    },
+    "autoScaleSettingsName": {
+      "type": "string",
+      "value": "[variables('autoScaleSettingsName')]"
+    },
+    "scalingConfiguration": {
+      "type": "object",
+      "value": {
+        "environment": "[parameters('environmentName')]",
+        "minInstances": "[variables('currentConfig').minInstances]",
+        "maxInstances": "[variables('currentConfig').maxInstances]",
+        "cpuThreshold": "[variables('currentConfig').cpuThreshold]",
+        "memoryThreshold": "[variables('currentConfig').memoryThreshold]"
+      }
+    }
+  }
+}

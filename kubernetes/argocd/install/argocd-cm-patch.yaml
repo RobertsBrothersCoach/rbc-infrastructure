@@ -1,0 +1,58 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd
+data:
+  # Azure AD OIDC Configuration
+  url: https://argocd.yourdomain.com
+  
+  oidc.config: |
+    name: Azure AD
+    issuer: https://login.microsoftonline.com/YOUR_TENANT_ID/v2.0
+    clientId: YOUR_CLIENT_ID
+    clientSecret: $oidc.azure.clientSecret
+    requestedScopes: ["openid", "profile", "email"]
+    requestedIDTokenClaims: {"groups": {"essential": true}}
+    
+  # Repository configuration
+  repositories: |
+    - url: https://github.com/your-org/rbc-infrastructure
+      type: git
+    - url: https://github.com/your-org/RBC-LeasingApp
+      type: git
+      
+  # Resource customizations for health checks
+  resource.customizations: |
+    argoproj.io/Application:
+      health.lua: |
+        hs = {}
+        hs.status = "Healthy"
+        hs.message = ""
+        if obj.status ~= nil then
+          if obj.status.health ~= nil then
+            hs.status = obj.status.health.status
+            hs.message = obj.status.health.message
+          end
+        end
+        return hs
+    networking.k8s.io/Ingress:
+      health.lua: |
+        hs = {}
+        hs.status = "Healthy"
+        hs.message = ""
+        if obj.status ~= nil then
+          if obj.status.loadBalancer ~= nil then
+            if obj.status.loadBalancer.ingress ~= nil then
+              hs.status = "Healthy"
+              hs.message = "Ingress is ready"
+            end
+          end
+        end
+        return hs
+        
+  # Application defaults
+  application.instanceLabelKey: argocd.argoproj.io/instance
+  
+  # Webhook configuration for GitHub
+  webhook.github.secret: $webhook.github.secret

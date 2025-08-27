@@ -1,0 +1,117 @@
+name: Deploy Infrastructure with Bicep
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'bicep/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'bicep/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+env:
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Validate Bicep templates
+      run: |
+        # Validate all Bicep files
+        for file in $(find bicep -name "*.bicep"); do
+          echo "Validating $file..."
+          az bicep build --file "$file"
+        done
+
+  deploy-dev:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: development
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS_DEV }}
+
+    - name: Deploy to Dev
+      run: |
+        az deployment sub create \
+          --location eastus \
+          --template-file bicep/environments/dev/main.bicep \
+          --parameters bicep/environments/dev/parameters.json \
+          --name dev-deployment-${{ github.run_number }}
+
+  deploy-staging:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging'
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS_STAGING }}
+
+    - name: Deploy to Staging
+      run: |
+        az deployment sub create \
+          --location eastus \
+          --template-file bicep/environments/staging/main.bicep \
+          --parameters bicep/environments/staging/parameters.json \
+          --name staging-deployment-${{ github.run_number }}
+
+  deploy-prod:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'prod'
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS_PROD }}
+
+    - name: Deploy to Production
+      run: |
+        az deployment sub create \
+          --location eastus \
+          --template-file bicep/environments/prod/main.bicep \
+          --parameters bicep/environments/prod/parameters.json \
+          --name prod-deployment-${{ github.run_number }}
+
+    - name: Tag Release
+      if: success()
+      run: |
+        git tag -a "prod-${{ github.run_number }}" -m "Production deployment ${{ github.run_number }}"
+        git push origin "prod-${{ github.run_number }}"

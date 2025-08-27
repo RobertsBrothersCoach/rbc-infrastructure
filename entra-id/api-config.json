@@ -1,0 +1,38 @@
+{
+  "acceptMappedClaims": null,
+  "knownClientApplications": [],
+  "oauth2PermissionScopes": [
+    {
+      "adminConsentDescription": "Allows the app to read bus leasing data on behalf of the signed-in user",
+      "adminConsentDisplayName": "Read bus leasing data",
+      "id": "a8f3d9e1-7c4b-4e2a-9f6d-8b5c3a1e0d7f",
+      "isEnabled": true,
+      "type": "User",
+      "userConsentDescription": "Allow the app to read bus leasing data on your behalf",
+      "userConsentDisplayName": "Read your bus leasing data",
+      "value": "BusLeasing.Read"
+    },
+    {
+      "adminConsentDescription": "Allows the app to create and update bus leasing data on behalf of the signed-in user",
+      "adminConsentDisplayName": "Write bus leasing data",
+      "id": "b9e4c8f2-8d5a-3f1b-a07e-9c6d4b2f1e8a",
+      "isEnabled": true,
+      "type": "User",
+      "userConsentDescription": "Allow the app to create and update bus leasing data on your behalf",
+      "userConsentDisplayName": "Create and update your bus leasing data",
+      "value": "BusLeasing.Write"
+    },
+    {
+      "adminConsentDescription": "Allows the app to perform administrative functions on bus leasing data on behalf of the signed-in user",
+      "adminConsentDisplayName": "Administer bus leasing data",
+      "id": "c7f5d9a3-9e6b-4c2d-b18f-7d4e5c3b2f9c",
+      "isEnabled": true,
+      "type": "Admin",
+      "userConsentDescription": "Allow the app to perform administrative functions on bus leasing data on your behalf",
+      "userConsentDisplayName": "Administer bus leasing data",
+      "value": "BusLeasing.Admin"
+    }
+  ],
+  "preAuthorizedApplications": [],
+  "requestedAccessTokenVersion": 2
+}

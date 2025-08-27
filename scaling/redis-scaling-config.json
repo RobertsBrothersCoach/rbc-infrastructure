@@ -1,0 +1,144 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "redisCacheName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Redis Cache instance"
+      }
+    },
+    "environmentName": {
+      "type": "string",
+      "allowedValues": ["dev", "qa", "prod"],
+      "metadata": {
+        "description": "Environment name"
+      }
+    }
+  },
+  "variables": {
+    "redisConfigs": {
+      "dev": {
+        "sku": "Basic",
+        "family": "C",
+        "capacity": 0,
+        "maxMemoryPolicy": "allkeys-lru",
+        "maxMemoryReserved": 30,
+        "maxFragmentationMemoryReserved": 30,
+        "enableNonSslPort": false,
+        "minimumTlsVersion": "1.2"
+      },
+      "qa": {
+        "sku": "Standard",
+        "family": "C",
+        "capacity": 1,
+        "maxMemoryPolicy": "allkeys-lru",
+        "maxMemoryReserved": 50,
+        "maxFragmentationMemoryReserved": 50,
+        "enableNonSslPort": false,
+        "minimumTlsVersion": "1.2"
+      },
+      "prod": {
+        "sku": "Premium",
+        "family": "P",
+        "capacity": 1,
+        "maxMemoryPolicy": "allkeys-lru",
+        "maxMemoryReserved": 100,
+        "maxFragmentationMemoryReserved": 100,
+        "enableNonSslPort": false,
+        "minimumTlsVersion": "1.2",
+        "shardCount": 2,
+        "replicasPerMaster": 1,
+        "zones": ["1", "2", "3"]
+      }
+    },
+    "currentConfig": "[variables('redisConfigs')[parameters('environmentName')]]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Cache/redis",
+      "apiVersion": "2023-08-01",
+      "name": "[parameters('redisCacheName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "sku": {
+          "name": "[variables('currentConfig').sku]",
+          "family": "[variables('currentConfig').family]",
+          "capacity": "[variables('currentConfig').capacity]"
+        },
+        "enableNonSslPort": "[variables('currentConfig').enableNonSslPort]",
+        "minimumTlsVersion": "[variables('currentConfig').minimumTlsVersion]",
+        "redisConfiguration": "[if(equals(parameters('environmentName'), 'prod'), 
+          json(concat('{',
+            '\"maxmemory-policy\": \"', variables('currentConfig').maxMemoryPolicy, '\",',
+            '\"maxmemory-reserved\": \"', string(variables('currentConfig').maxMemoryReserved), '\",',
+            '\"maxfragmentationmemory-reserved\": \"', string(variables('currentConfig').maxFragmentationMemoryReserved), '\",',
+            '\"maxmemory-delta\": \"', string(variables('currentConfig').maxMemoryReserved), '\",',
+            '\"notify-keyspace-events\": \"KEA\",',
+            '\"rdb-backup-enabled\": \"true\",',
+            '\"rdb-backup-frequency\": \"60\",',
+            '\"rdb-backup-max-snapshot-count\": \"1\"',
+          '}')),
+          json(concat('{',
+            '\"maxmemory-policy\": \"', variables('currentConfig').maxMemoryPolicy, '\",',
+            '\"maxmemory-reserved\": \"', string(variables('currentConfig').maxMemoryReserved), '\",',
+            '\"maxfragmentationmemory-reserved\": \"', string(variables('currentConfig').maxFragmentationMemoryReserved), '\",',
+            '\"maxmemory-delta\": \"', string(variables('currentConfig').maxMemoryReserved), '\",',
+            '\"notify-keyspace-events\": \"KEA\"',
+          '}'))
+        )]",
+        "shardCount": "[if(equals(parameters('environmentName'), 'prod'), variables('currentConfig').shardCount, 0)]",
+        "replicasPerMaster": "[if(equals(parameters('environmentName'), 'prod'), variables('currentConfig').replicasPerMaster, 0)]",
+        "zones": "[if(equals(parameters('environmentName'), 'prod'), variables('currentConfig').zones, createArray())]"
+      }
+    },
+    {
+      "type": "Microsoft.Insights/metricAlerts",
+      "apiVersion": "2018-03-01",
+      "name": "[concat(parameters('redisCacheName'), '-memory-alert')]",
+      "location": "global",
+      "dependsOn": [
+        "[resourceId('Microsoft.Cache/redis', parameters('redisCacheName'))]"
+      ],
+      "properties": {
+        "description": "Alert when Redis memory usage exceeds threshold",
+        "severity": 2,
+        "enabled": true,
+        "scopes": [
+          "[resourceId('Microsoft.Cache/redis', parameters('redisCacheName'))]"
+        ],
+        "evaluationFrequency": "PT5M",
+        "windowSize": "PT15M",
+        "criteria": {
+          "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+          "allOf": [
+            {
+              "name": "MemoryUsageHigh",
+              "metricName": "UsedMemoryPercentage",
+              "operator": "GreaterThan",
+              "threshold": 70,
+              "timeAggregation": "Average"
+            }
+          ]
+        },
+        "actions": []
+      }
+    }
+  ],
+  "outputs": {
+    "redisCacheId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Cache/redis', parameters('redisCacheName'))]"
+    },
+    "redisConfiguration": {
+      "type": "object",
+      "value": {
+        "environment": "[parameters('environmentName')]",
+        "sku": "[variables('currentConfig').sku]",
+        "capacity": "[variables('currentConfig').capacity]",
+        "maxMemoryPolicy": "[variables('currentConfig').maxMemoryPolicy]",
+        "shardCount": "[if(equals(parameters('environmentName'), 'prod'), variables('currentConfig').shardCount, 0)]"
+      }
+    }
+  }
+}

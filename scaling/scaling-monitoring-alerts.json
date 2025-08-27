@@ -1,0 +1,335 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "description": "Comprehensive monitoring and alerting for auto-scaling events",
+  "parameters": {
+    "environmentName": {
+      "type": "string",
+      "allowedValues": ["dev", "qa", "prod"],
+      "metadata": {
+        "description": "Environment name"
+      }
+    },
+    "actionGroupId": {
+      "type": "string",
+      "metadata": {
+        "description": "Action group resource ID for alert notifications"
+      }
+    },
+    "appServicePlanName": {
+      "type": "string",
+      "metadata": {
+        "description": "App Service Plan name"
+      }
+    },
+    "applicationInsightsName": {
+      "type": "string",
+      "metadata": {
+        "description": "Application Insights name"
+      }
+    }
+  },
+  "variables": {
+    "alertConfigs": {
+      "dev": {
+        "criticalThreshold": 95,
+        "warningThreshold": 85,
+        "evaluationFrequency": "PT5M",
+        "windowSize": "PT15M",
+        "autoMitigate": true
+      },
+      "qa": {
+        "criticalThreshold": 90,
+        "warningThreshold": 80,
+        "evaluationFrequency": "PT5M",
+        "windowSize": "PT10M",
+        "autoMitigate": true
+      },
+      "prod": {
+        "criticalThreshold": 85,
+        "warningThreshold": 75,
+        "evaluationFrequency": "PT1M",
+        "windowSize": "PT5M",
+        "autoMitigate": false
+      }
+    },
+    "currentAlertConfig": "[variables('alertConfigs')[parameters('environmentName')]]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/metricAlerts",
+      "apiVersion": "2018-03-01",
+      "name": "[concat(parameters('appServicePlanName'), '-scaling-max-instances')]",
+      "location": "global",
+      "properties": {
+        "description": "Alert when auto-scaling reaches maximum instance count",
+        "severity": 1,
+        "enabled": true,
+        "scopes": [
+          "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]"
+        ],
+        "evaluationFrequency": "[variables('currentAlertConfig').evaluationFrequency]",
+        "windowSize": "[variables('currentAlertConfig').windowSize]",
+        "criteria": {
+          "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+          "allOf": [
+            {
+              "name": "MaxInstancesReached",
+              "metricName": "InstanceCount",
+              "operator": "GreaterThanOrEqual",
+              "threshold": "[if(equals(parameters('environmentName'), 'prod'), 10, 3)]",
+              "timeAggregation": "Maximum"
+            }
+          ]
+        },
+        "autoMitigate": "[variables('currentAlertConfig').autoMitigate]",
+        "actions": [
+          {
+            "actionGroupId": "[parameters('actionGroupId')]"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Insights/metricAlerts",
+      "apiVersion": "2018-03-01",
+      "name": "[concat(parameters('appServicePlanName'), '-scaling-frequency')]",
+      "location": "global",
+      "properties": {
+        "description": "Alert when scaling operations occur too frequently (flapping)",
+        "severity": 2,
+        "enabled": true,
+        "scopes": [
+          "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]"
+        ],
+        "evaluationFrequency": "PT5M",
+        "windowSize": "PT30M",
+        "criteria": {
+          "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+          "allOf": [
+            {
+              "name": "FrequentScaling",
+              "metricName": "InstanceCount",
+              "operator": "GreaterThan",
+              "threshold": 0,
+              "timeAggregation": "Count",
+              "dimensions": [],
+              "metricNamespace": "microsoft.web/serverfarms",
+              "skipMetricValidation": false
+            }
+          ]
+        },
+        "autoMitigate": true,
+        "actions": [
+          {
+            "actionGroupId": "[parameters('actionGroupId')]"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Insights/metricAlerts",
+      "apiVersion": "2018-03-01",
+      "name": "[concat(parameters('appServicePlanName'), '-sustained-high-load')]",
+      "location": "global",
+      "properties": {
+        "description": "Alert when high load persists after scaling",
+        "severity": 1,
+        "enabled": true,
+        "scopes": [
+          "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]"
+        ],
+        "evaluationFrequency": "PT5M",
+        "windowSize": "PT30M",
+        "criteria": {
+          "odata.type": "Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria",
+          "allOf": [
+            {
+              "name": "SustainedHighCPU",
+              "metricName": "CpuPercentage",
+              "operator": "GreaterThan",
+              "threshold": "[variables('currentAlertConfig').criticalThreshold]",
+              "timeAggregation": "Average"
+            },
+            {
+              "name": "SustainedHighMemory",
+              "metricName": "MemoryPercentage",
+              "operator": "GreaterThan",
+              "threshold": "[variables('currentAlertConfig').criticalThreshold]",
+              "timeAggregation": "Average"
+            }
+          ]
+        },
+        "autoMitigate": "[variables('currentAlertConfig').autoMitigate]",
+        "actions": [
+          {
+            "actionGroupId": "[parameters('actionGroupId')]"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Insights/metricAlerts",
+      "apiVersion": "2018-03-01",
+      "name": "[concat(parameters('applicationInsightsName'), '-response-time-degradation')]",
+      "location": "global",
+      "properties": {
+        "description": "Alert when response times degrade during scaling",
+        "severity": 2,
+        "enabled": true,
+        "scopes": [
+          "[resourceId('Microsoft.Insights/components', parameters('applicationInsightsName'))]"
+        ],
+        "evaluationFrequency": "PT1M",
+        "windowSize": "PT5M",
+        "criteria": {
+          "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+          "allOf": [
+            {
+              "name": "HighResponseTime",
+              "metricName": "requests/duration",
+              "operator": "GreaterThan",
+              "threshold": "[if(equals(parameters('environmentName'), 'prod'), 1000, 2000)]",
+              "timeAggregation": "Average"
+            }
+          ]
+        },
+        "autoMitigate": "[variables('currentAlertConfig').autoMitigate]",
+        "actions": [
+          {
+            "actionGroupId": "[parameters('actionGroupId')]"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Insights/metricAlerts",
+      "apiVersion": "2018-03-01",
+      "name": "[concat(parameters('applicationInsightsName'), '-failed-requests-spike')]",
+      "location": "global",
+      "properties": {
+        "description": "Alert when failed requests spike during scaling",
+        "severity": 1,
+        "enabled": true,
+        "scopes": [
+          "[resourceId('Microsoft.Insights/components', parameters('applicationInsightsName'))]"
+        ],
+        "evaluationFrequency": "PT1M",
+        "windowSize": "PT5M",
+        "criteria": {
+          "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+          "allOf": [
+            {
+              "name": "FailedRequestsSpike",
+              "metricName": "requests/failed",
+              "operator": "GreaterThan",
+              "threshold": "[if(equals(parameters('environmentName'), 'prod'), 10, 20)]",
+              "timeAggregation": "Count"
+            }
+          ]
+        },
+        "autoMitigate": false,
+        "actions": [
+          {
+            "actionGroupId": "[parameters('actionGroupId')]"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Insights/scheduledQueryRules",
+      "apiVersion": "2021-08-01",
+      "name": "[concat(parameters('applicationInsightsName'), '-scaling-effectiveness')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "description": "Monitor scaling effectiveness by correlating instance count with performance metrics",
+        "severity": 3,
+        "enabled": true,
+        "evaluationFrequency": "PT15M",
+        "windowSize": "PT1H",
+        "criteria": {
+          "allOf": [
+            {
+              "query": "let ScalingEvents = AzureActivity | where OperationNameValue contains 'autoscale' | where ActivityStatusValue == 'Succeeded' | project TimeGenerated, Properties; let PerformanceMetrics = performanceCounters | where name in ('Processor(_Total)\\% Processor Time', 'Memory\\Available MBytes') | summarize AvgCPU = avg(value), AvgMemory = avg(value) by bin(TimeGenerated, 5m); ScalingEvents | join kind=inner PerformanceMetrics on $left.TimeGenerated == $right.TimeGenerated | where AvgCPU > 70 or AvgMemory < 1000",
+              "timeAggregation": "Count",
+              "dimensions": [],
+              "operator": "GreaterThan",
+              "threshold": 3,
+              "failingPeriods": {
+                "numberOfEvaluationPeriods": 2,
+                "minFailingPeriodsToAlert": 1
+              }
+            }
+          ]
+        },
+        "scopes": [
+          "[resourceId('Microsoft.Insights/components', parameters('applicationInsightsName'))]"
+        ],
+        "actions": {
+          "actionGroups": [
+            "[parameters('actionGroupId')]"
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/diagnosticSettings",
+      "apiVersion": "2021-05-01-preview",
+      "name": "[concat(parameters('appServicePlanName'), '-scaling-diagnostics')]",
+      "scope": "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
+      "properties": {
+        "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', concat('log-analytics-', parameters('environmentName')))]",
+        "metrics": [
+          {
+            "category": "AllMetrics",
+            "enabled": true,
+            "retentionPolicy": {
+              "enabled": true,
+              "days": "[if(equals(parameters('environmentName'), 'prod'), 90, 30)]"
+            }
+          }
+        ],
+        "logs": [
+          {
+            "category": "AutoscaleEvaluations",
+            "enabled": true,
+            "retentionPolicy": {
+              "enabled": true,
+              "days": "[if(equals(parameters('environmentName'), 'prod'), 90, 30)]"
+            }
+          },
+          {
+            "category": "AutoscaleScaleActions",
+            "enabled": true,
+            "retentionPolicy": {
+              "enabled": true,
+              "days": "[if(equals(parameters('environmentName'), 'prod'), 90, 30)]"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "outputs": {
+    "monitoringConfiguration": {
+      "type": "object",
+      "value": {
+        "environment": "[parameters('environmentName')]",
+        "criticalThreshold": "[variables('currentAlertConfig').criticalThreshold]",
+        "warningThreshold": "[variables('currentAlertConfig').warningThreshold]",
+        "evaluationFrequency": "[variables('currentAlertConfig').evaluationFrequency]",
+        "windowSize": "[variables('currentAlertConfig').windowSize]",
+        "autoMitigate": "[variables('currentAlertConfig').autoMitigate]"
+      }
+    },
+    "scalingQueries": {
+      "type": "object",
+      "value": {
+        "scalingEventHistory": "AzureActivity | where OperationNameValue contains 'autoscale' | project TimeGenerated, OperationNameValue, ActivityStatusValue, Properties | order by TimeGenerated desc",
+        "instanceCountTrend": "AzureMetrics | where MetricName == 'InstanceCount' | summarize InstanceCount = avg(Average) by bin(TimeGenerated, 5m) | render timechart",
+        "scalingEffectiveness": "let ScalingEvents = AzureActivity | where OperationNameValue contains 'autoscale'; let ResponseTimes = AppRequests | summarize AvgDuration = avg(DurationMs) by bin(TimeGenerated, 5m); ScalingEvents | join kind=inner ResponseTimes on TimeGenerated | project TimeGenerated, ScalingAction = OperationNameValue, ResponseTime = AvgDuration",
+        "costImpact": "AzureMetrics | where MetricName == 'InstanceCount' | summarize HourlyInstances = avg(Average) by bin(TimeGenerated, 1h) | extend EstimatedCost = HourlyInstances * 0.10 | summarize DailyCost = sum(EstimatedCost) by bin(TimeGenerated, 1d)"
+      }
+    }
+  }
+}

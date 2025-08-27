@@ -1,0 +1,213 @@
+name: Infrastructure Deployment
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'bicep/**'
+      - '.github/workflows/infrastructure-deployment.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'bicep/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - qa
+          - prod
+      action:
+        description: 'Deployment action'
+        required: true
+        default: 'deploy'
+        type: choice
+        options:
+          - deploy
+          - destroy
+          - plan
+
+env:
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+jobs:
+  # Validate Bicep templates
+  validate:
+    name: Validate Bicep Templates
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Validate main template
+        run: |
+          az bicep build --file bicep/main.bicep
+      
+      - name: Validate modules
+        run: |
+          for file in bicep/modules/*.bicep; do
+            echo "Validating $file"
+            az bicep build --file "$file"
+          done
+      
+      - name: Run What-If deployment
+        if: github.event_name == 'pull_request'
+        run: |
+          az deployment sub what-if \
+            --location eastus \
+            --template-file bicep/main.bicep \
+            --parameters bicep/environments/dev.parameters.json \
+            --name pr-${{ github.event.pull_request.number }}
+
+  # Deploy to Development
+  deploy-dev:
+    name: Deploy to Development
+    runs-on: ubuntu-latest
+    needs: validate
+    if: |
+      github.ref == 'refs/heads/main' && 
+      github.event_name == 'push'
+    environment:
+      name: development
+      url: https://dev.yourdomain.com
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS_DEV }}
+      
+      - name: Deploy infrastructure
+        run: |
+          az deployment sub create \
+            --location eastus \
+            --template-file bicep/main.bicep \
+            --parameters bicep/environments/dev.parameters.json \
+            --name dev-${{ github.run_number }} \
+            --confirm-with-what-if
+      
+      - name: Output deployment results
+        run: |
+          az deployment sub show \
+            --name dev-${{ github.run_number }} \
+            --query properties.outputs
+
+  # Deploy to QA (manual approval required)
+  deploy-qa:
+    name: Deploy to QA
+    runs-on: ubuntu-latest
+    needs: validate
+    if: |
+      github.event_name == 'workflow_dispatch' && 
+      github.event.inputs.environment == 'qa'
+    environment:
+      name: qa
+      url: https://qa.yourdomain.com
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS_QA }}
+      
+      - name: Deploy infrastructure
+        run: |
+          az deployment sub create \
+            --location eastus \
+            --template-file bicep/main.bicep \
+            --parameters bicep/environments/qa.parameters.json \
+            --name qa-${{ github.run_number }} \
+            --confirm-with-what-if
+      
+      - name: Run smoke tests
+        run: |
+          # Add smoke test scripts here
+          echo "Running smoke tests..."
+
+  # Deploy to Production (manual approval required)
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: validate
+    if: |
+      github.event_name == 'workflow_dispatch' && 
+      github.event.inputs.environment == 'prod'
+    environment:
+      name: production
+      url: https://www.yourdomain.com
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Create deployment backup
+        run: |
+          # Backup current infrastructure state
+          echo "Creating infrastructure backup..."
+      
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS_PROD }}
+      
+      - name: Deploy infrastructure
+        run: |
+          az deployment sub create \
+            --location eastus \
+            --template-file bicep/main.bicep \
+            --parameters bicep/environments/prod.parameters.json \
+            --name prod-${{ github.run_number }} \
+            --confirm-with-what-if
+      
+      - name: Tag release
+        if: success()
+        run: |
+          git tag -a "infra-v${{ github.run_number }}" -m "Infrastructure release ${{ github.run_number }}"
+          git push origin "infra-v${{ github.run_number }}"
+      
+      - name: Create rollback plan
+        if: failure()
+        run: |
+          echo "Deployment failed. Rollback plan available."
+          # Add rollback logic here
+
+  # Destroy infrastructure (only for non-production)
+  destroy:
+    name: Destroy Infrastructure
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' && 
+      github.event.inputs.action == 'destroy' &&
+      github.event.inputs.environment != 'prod'
+    environment:
+      name: ${{ github.event.inputs.environment }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets[format('AZURE_CREDENTIALS_{0}', upper(github.event.inputs.environment))] }}
+      
+      - name: Confirm destruction
+        run: |
+          echo "⚠️ WARNING: About to destroy ${{ github.event.inputs.environment }} infrastructure"
+          echo "This action cannot be undone!"
+      
+      - name: Destroy infrastructure
+        run: |
+          # Add destruction logic here
+          echo "Destroying ${{ github.event.inputs.environment }} infrastructure..."

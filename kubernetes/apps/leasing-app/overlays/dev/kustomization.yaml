@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: leasing-app-dev
+
+bases:
+  - ../../base
+
+namePrefix: dev-
+
+commonLabels:
+  environment: development
+
+patchesStrategicMerge:
+  - deployment-patch.yaml
+  - ingress-patch.yaml
+
+configMapGenerator:
+  - name: leasing-app-config
+    literals:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+      - ENABLE_DEBUG=true
+
+images:
+  - name: your-acr.azurecr.io/leasing-app-backend
+    newTag: dev-latest
+  - name: your-acr.azurecr.io/leasing-app-frontend
+    newTag: dev-latest
+
+replicas:
+  - name: leasing-app-backend
+    count: 1
+  - name: leasing-app-frontend
+    count: 1

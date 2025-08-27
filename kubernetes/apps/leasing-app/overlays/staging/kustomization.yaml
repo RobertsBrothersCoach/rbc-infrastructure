@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: leasing-app-staging
+
+bases:
+  - ../../base
+
+namePrefix: staging-
+
+commonLabels:
+  environment: staging
+
+patchesStrategicMerge:
+  - deployment-patch.yaml
+  - ingress-patch.yaml
+
+configMapGenerator:
+  - name: leasing-app-config
+    literals:
+      - NODE_ENV=staging
+      - LOG_LEVEL=info
+      - ENABLE_DEBUG=false
+
+images:
+  - name: your-acr.azurecr.io/leasing-app-backend
+    newTag: staging-v1.0.0
+  - name: your-acr.azurecr.io/leasing-app-frontend
+    newTag: staging-v1.0.0
+
+replicas:
+  - name: leasing-app-backend
+    count: 2
+  - name: leasing-app-frontend
+    count: 2

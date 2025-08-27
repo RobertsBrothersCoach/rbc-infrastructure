@@ -1,0 +1,39 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: leasing-app-dev
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    app: leasing-app
+    environment: development
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/your-org/rbc-infrastructure
+    targetRevision: main
+    path: kubernetes/apps/leasing-app/overlays/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: leasing-app-dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  revisionHistoryLimit: 10
+  info:
+    - name: "Description"
+      value: "Development environment for RBC Leasing Application"
+    - name: "Owner"
+      value: "Development Team"

@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-rbac-cm
+  namespace: argocd
+data:
+  # Map Azure AD groups to ArgoCD roles
+  policy.default: role:readonly
+  
+  policy.csv: |
+    # Admin group from Azure AD
+    g, YOUR_AZURE_AD_ADMIN_GROUP_ID, role:admin
+    
+    # Developer group - can sync and view all applications
+    g, YOUR_AZURE_AD_DEV_GROUP_ID, role:developer
+    
+    # Readonly group - can only view
+    g, YOUR_AZURE_AD_READONLY_GROUP_ID, role:readonly
+    
+    # Custom policies
+    p, role:developer, applications, get, */*, allow
+    p, role:developer, applications, sync, */*, allow
+    p, role:developer, applications, action/*, */*, allow
+    p, role:developer, logs, get, */*, allow
+    p, role:developer, exec, create, */*, allow
+    
+    p, role:readonly, applications, get, */*, allow
+    p, role:readonly, logs, get, */*, allow
+    
+    # Production restrictions - only admins can sync prod
+    p, role:developer, applications, sync, */*-prod, deny
+    p, role:admin, applications, *, */*, allow
+    p, role:admin, clusters, *, *, allow
+    p, role:admin, repositories, *, *, allow
+    
+  scopes: '[groups, email]'

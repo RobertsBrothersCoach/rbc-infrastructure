@@ -1,0 +1,56 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: leasing-app-prod
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    app: leasing-app
+    environment: production
+    critical: "true"
+spec:
+  project: production
+  source:
+    repoURL: https://github.com/your-org/rbc-infrastructure
+    targetRevision: main
+    path: kubernetes/apps/leasing-app/overlays/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: leasing-app-prod
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+      - RespectIgnoreDifferences=true
+      - ApplyOutOfSyncOnly=true
+    managedNamespaceMetadata:
+      labels:
+        environment: production
+        pci-compliant: "true"
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
+  revisionHistoryLimit: 20
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler
+      jsonPointers:
+        - /spec/minReplicas
+        - /spec/maxReplicas
+  info:
+    - name: "Description"
+      value: "Production environment for RBC Leasing Application"
+    - name: "Owner"
+      value: "Platform Team"
+    - name: "SLA"
+      value: "99.9%"
+    - name: "Compliance"
+      value: "PCI-DSS"

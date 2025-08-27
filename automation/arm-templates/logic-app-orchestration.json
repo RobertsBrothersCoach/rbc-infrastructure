@@ -1,0 +1,384 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "logicAppName": {
+      "type": "string",
+      "defaultValue": "logic-tourbus-env-orchestration",
+      "metadata": {
+        "description": "Name of the Logic App for environment orchestration"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for the Logic App"
+      }
+    },
+    "automationAccountName": {
+      "type": "string",
+      "defaultValue": "aa-tourbus-automation",
+      "metadata": {
+        "description": "Name of the Azure Automation Account"
+      }
+    },
+    "teamsWebhookUrl": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Microsoft Teams webhook URL for notifications"
+      }
+    },
+    "environmentName": {
+      "type": "string",
+      "allowedValues": ["Development", "QA"],
+      "defaultValue": "Development",
+      "metadata": {
+        "description": "Environment name"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource group containing environment resources"
+      }
+    }
+  },
+  "variables": {
+    "automationAccountId": "[resourceId('Microsoft.Automation/automationAccounts', parameters('automationAccountName'))]",
+    "shutdownRunbookName": "ScheduledShutdown",
+    "startupRunbookName": "ScheduledStartup",
+    "manualOverrideRunbookName": "ManualOverride"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('logicAppName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "automationAccountId": {
+              "defaultValue": "[variables('automationAccountId')]",
+              "type": "string"
+            },
+            "teamsWebhookUrl": {
+              "defaultValue": "[parameters('teamsWebhookUrl')]",
+              "type": "securestring"
+            }
+          },
+          "triggers": {
+            "ShutdownSchedule": {
+              "type": "Recurrence",
+              "recurrence": {
+                "frequency": "Day",
+                "interval": 1,
+                "schedule": {
+                  "hours": ["19"],
+                  "minutes": [0],
+                  "timeZone": "Eastern Standard Time"
+                }
+              }
+            },
+            "StartupSchedule": {
+              "type": "Recurrence",
+              "recurrence": {
+                "frequency": "Week",
+                "interval": 1,
+                "schedule": {
+                  "weekDays": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+                  "hours": ["7"],
+                  "minutes": [0],
+                  "timeZone": "Eastern Standard Time"
+                }
+              }
+            },
+            "ManualTrigger": {
+              "type": "Request",
+              "kind": "Http",
+              "inputs": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "action": {
+                      "type": "string",
+                      "enum": ["Shutdown", "Startup"]
+                    },
+                    "overrideSchedule": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": ["action"]
+                }
+              }
+            }
+          },
+          "actions": {
+            "Switch_Trigger": {
+              "type": "Switch",
+              "expression": "@triggerOutputs()['headers']['x-ms-workflow-trigger-name']",
+              "cases": {
+                "ShutdownSchedule": {
+                  "case": "ShutdownSchedule",
+                  "actions": {
+                    "Check_Shutdown_Override": {
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "shutdownOverride",
+                            "type": "boolean",
+                            "value": false
+                          }
+                        ]
+                      }
+                    },
+                    "Run_Shutdown_Runbook": {
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azureautomation']['connectionId']"
+                          }
+                        },
+                        "method": "put",
+                        "path": "[concat('/subscriptions/@{encodeURIComponent(subscription().subscriptionId)}/resourceGroups/@{encodeURIComponent(resourceGroup().name)}/providers/Microsoft.Automation/automationAccounts/@{encodeURIComponent(''', parameters('automationAccountName'), ''')}/jobs')]",
+                        "body": {
+                          "properties": {
+                            "runbook": {
+                              "name": "[variables('shutdownRunbookName')]"
+                            },
+                            "parameters": {
+                              "EnvironmentName": "[parameters('environmentName')]",
+                              "ResourceGroupName": "[parameters('resourceGroupName')]"
+                            }
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "Check_Shutdown_Override": ["Succeeded"]
+                      }
+                    },
+                    "Notify_Shutdown_Complete": {
+                      "type": "Http",
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "@parameters('teamsWebhookUrl')",
+                        "body": {
+                          "@type": "MessageCard",
+                          "@context": "https://schema.org/extensions",
+                          "summary": "Environment Shutdown",
+                          "themeColor": "00FF00",
+                          "title": "Scheduled Shutdown Completed",
+                          "sections": [
+                            {
+                              "activityTitle": "[parameters('environmentName')]",
+                              "activitySubtitle": "@{utcNow()}",
+                              "text": "Environment has been shut down successfully"
+                            }
+                          ]
+                        }
+                      },
+                      "runAfter": {
+                        "Run_Shutdown_Runbook": ["Succeeded"]
+                      }
+                    }
+                  }
+                },
+                "StartupSchedule": {
+                  "case": "StartupSchedule",
+                  "actions": {
+                    "Check_Startup_Override": {
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "startupOverride",
+                            "type": "boolean",
+                            "value": false
+                          }
+                        ]
+                      }
+                    },
+                    "Run_Startup_Runbook": {
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azureautomation']['connectionId']"
+                          }
+                        },
+                        "method": "put",
+                        "path": "[concat('/subscriptions/@{encodeURIComponent(subscription().subscriptionId)}/resourceGroups/@{encodeURIComponent(resourceGroup().name)}/providers/Microsoft.Automation/automationAccounts/@{encodeURIComponent(''', parameters('automationAccountName'), ''')}/jobs')]",
+                        "body": {
+                          "properties": {
+                            "runbook": {
+                              "name": "[variables('startupRunbookName')]"
+                            },
+                            "parameters": {
+                              "EnvironmentName": "[parameters('environmentName')]",
+                              "ResourceGroupName": "[parameters('resourceGroupName')]"
+                            }
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "Check_Startup_Override": ["Succeeded"]
+                      }
+                    },
+                    "Notify_Startup_Complete": {
+                      "type": "Http",
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "@parameters('teamsWebhookUrl')",
+                        "body": {
+                          "@type": "MessageCard",
+                          "@context": "https://schema.org/extensions",
+                          "summary": "Environment Startup",
+                          "themeColor": "00FF00",
+                          "title": "Scheduled Startup Completed",
+                          "sections": [
+                            {
+                              "activityTitle": "[parameters('environmentName')]",
+                              "activitySubtitle": "@{utcNow()}",
+                              "text": "Environment has been started successfully"
+                            }
+                          ]
+                        }
+                      },
+                      "runAfter": {
+                        "Run_Startup_Runbook": ["Succeeded"]
+                      }
+                    }
+                  }
+                },
+                "ManualTrigger": {
+                  "case": "ManualTrigger",
+                  "actions": {
+                    "Parse_Request_Body": {
+                      "type": "ParseJson",
+                      "inputs": {
+                        "content": "@triggerBody()",
+                        "schema": {
+                          "type": "object",
+                          "properties": {
+                            "action": {
+                              "type": "string"
+                            },
+                            "overrideSchedule": {
+                              "type": "boolean"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "Run_Manual_Override": {
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azureautomation']['connectionId']"
+                          }
+                        },
+                        "method": "put",
+                        "path": "[concat('/subscriptions/@{encodeURIComponent(subscription().subscriptionId)}/resourceGroups/@{encodeURIComponent(resourceGroup().name)}/providers/Microsoft.Automation/automationAccounts/@{encodeURIComponent(''', parameters('automationAccountName'), ''')}/jobs')]",
+                        "body": {
+                          "properties": {
+                            "runbook": {
+                              "name": "[variables('manualOverrideRunbookName')]"
+                            },
+                            "parameters": {
+                              "Action": "@{body('Parse_Request_Body')?['action']}",
+                              "EnvironmentName": "[parameters('environmentName')]",
+                              "ResourceGroupName": "[parameters('resourceGroupName')]",
+                              "OverrideSchedule": "@{body('Parse_Request_Body')?['overrideSchedule']}"
+                            }
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "Parse_Request_Body": ["Succeeded"]
+                      }
+                    },
+                    "Respond_Success": {
+                      "type": "Response",
+                      "inputs": {
+                        "statusCode": 200,
+                        "body": {
+                          "status": "success",
+                          "message": "Manual override initiated",
+                          "action": "@{body('Parse_Request_Body')?['action']}",
+                          "environment": "[parameters('environmentName')]"
+                        }
+                      },
+                      "runAfter": {
+                        "Run_Manual_Override": ["Succeeded"]
+                      }
+                    }
+                  }
+                }
+              },
+              "default": {
+                "actions": {}
+              }
+            },
+            "Handle_Errors": {
+              "type": "Scope",
+              "actions": {
+                "Send_Error_Notification": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "@parameters('teamsWebhookUrl')",
+                    "body": {
+                      "@type": "MessageCard",
+                      "@context": "https://schema.org/extensions",
+                      "summary": "Orchestration Error",
+                      "themeColor": "FF0000",
+                      "title": "Environment Orchestration Failed",
+                      "sections": [
+                        {
+                          "activityTitle": "Error Details",
+                          "text": "@{result('Switch_Trigger')}"
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "runAfter": {
+                "Switch_Trigger": ["Failed", "Skipped", "TimedOut"]
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azureautomation": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', 'azureautomation')]",
+                "connectionName": "azureautomation",
+                "id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azureautomation')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "logicAppId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('logicAppName'))]"
+    },
+    "manualTriggerUrl": {
+      "type": "string",
+      "value": "[listCallbackUrl(concat(resourceId('Microsoft.Logic/workflows', parameters('logicAppName')), '/triggers/ManualTrigger'), '2019-05-01').value]"
+    }
+  }
+}

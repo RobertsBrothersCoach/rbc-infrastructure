@@ -1,0 +1,50 @@
+[
+  {
+    "allowedMemberTypes": ["User"],
+    "description": "Full system access and administrative privileges",
+    "displayName": "Administrator",
+    "id": "d1e5f9a3-8c7b-4a2e-9f1d-6b4c3e2a1d8f",
+    "isEnabled": true,
+    "value": "Administrator"
+  },
+  {
+    "allowedMemberTypes": ["User"],
+    "description": "Management level access to all modules",
+    "displayName": "Manager",
+    "id": "e2f6a9b4-9d8c-5b3f-a02e-7c5d4e3b2e9f",
+    "isEnabled": true,
+    "value": "Manager"
+  },
+  {
+    "allowedMemberTypes": ["User"],
+    "description": "Access to CRM module for client management",
+    "displayName": "CRM User",
+    "id": "f3a7b9c5-ae9d-6c4a-b13f-8d6e5f4c3f0a",
+    "isEnabled": true,
+    "value": "CRMUser"
+  },
+  {
+    "allowedMemberTypes": ["User"],
+    "description": "Access to fleet management and maintenance modules",
+    "displayName": "Fleet Manager",
+    "id": "a4b8c9d6-bf0e-7d5b-c24a-9e7f6a5d4a1b",
+    "isEnabled": true,
+    "value": "FleetManager"
+  },
+  {
+    "allowedMemberTypes": ["User"],
+    "description": "Access to financial and reporting modules",
+    "displayName": "Finance User",
+    "id": "b5c9d0e7-c01f-8e6c-d35b-0f8a7b6e5b2c",
+    "isEnabled": true,
+    "value": "FinanceUser"
+  },
+  {
+    "allowedMemberTypes": ["User"],
+    "description": "Read-only access to all modules",
+    "displayName": "Read Only User",
+    "id": "c6d0e1f8-d12a-9f7d-e46c-1a9b8c7f6c3d",
+    "isEnabled": true,
+    "value": "ReadOnlyUser"
+  }
+]

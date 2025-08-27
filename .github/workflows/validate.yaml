@@ -1,0 +1,87 @@
+name: Validate Kubernetes Manifests
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'latest'
+
+    - name: Setup Kustomize
+      run: |
+        curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+        sudo mv kustomize /usr/local/bin/
+
+    - name: Validate base manifests
+      run: |
+        echo "Validating base manifests..."
+        kustomize build kubernetes/apps/leasing-app/base --enable-helm | kubectl apply --dry-run=client -f -
+
+    - name: Validate dev overlay
+      run: |
+        echo "Validating dev overlay..."
+        kustomize build kubernetes/apps/leasing-app/overlays/dev --enable-helm | kubectl apply --dry-run=client -f -
+
+    - name: Validate staging overlay
+      run: |
+        echo "Validating staging overlay..."
+        kustomize build kubernetes/apps/leasing-app/overlays/staging --enable-helm | kubectl apply --dry-run=client -f -
+
+    - name: Validate prod overlay
+      run: |
+        echo "Validating prod overlay..."
+        kustomize build kubernetes/apps/leasing-app/overlays/prod --enable-helm | kubectl apply --dry-run=client -f -
+
+    - name: Validate ArgoCD applications
+      run: |
+        echo "Validating ArgoCD applications..."
+        for file in kubernetes/argocd/applications/*.yaml; do
+          echo "Checking $file..."
+          kubectl apply --dry-run=client -f "$file"
+        done
+
+  security-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Run Trivy security scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'config'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy results to GitHub Security
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Lint YAML files
+      uses: ibiqlik/action-yamllint@v3
+      with:
+        config_file: .yamllint.yml
+        strict: false

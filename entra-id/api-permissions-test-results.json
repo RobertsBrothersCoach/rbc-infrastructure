@@ -1,0 +1,110 @@
+{
+  "AppRolesConfigured": [
+    {
+      "allowedMemberTypes": [
+        "User"
+      ],
+      "description": "Read-only access to all modules",
+      "displayName": "Read Only User",
+      "id": "c6d0e1f8-d12a-9f7d-e46c-1a9b8c7f6c3d",
+      "isEnabled": true,
+      "origin": "Application",
+      "value": "ReadOnlyUser"
+    },
+    {
+      "allowedMemberTypes": [
+        "User"
+      ],
+      "description": "Access to financial and reporting modules",
+      "displayName": "Finance User",
+      "id": "b5c9d0e7-c01f-8e6c-d35b-0f8a7b6e5b2c",
+      "isEnabled": true,
+      "origin": "Application",
+      "value": "FinanceUser"
+    },
+    {
+      "allowedMemberTypes": [
+        "User"
+      ],
+      "description": "Access to fleet management and maintenance modules",
+      "displayName": "Fleet Manager",
+      "id": "a4b8c9d6-bf0e-7d5b-c24a-9e7f6a5d4a1b",
+      "isEnabled": true,
+      "origin": "Application",
+      "value": "FleetManager"
+    },
+    {
+      "allowedMemberTypes": [
+        "User"
+      ],
+      "description": "Access to CRM module for client management",
+      "displayName": "CRM User",
+      "id": "f3a7b9c5-ae9d-6c4a-b13f-8d6e5f4c3f0a",
+      "isEnabled": true,
+      "origin": "Application",
+      "value": "CRMUser"
+    },
+    {
+      "allowedMemberTypes": [
+        "User"
+      ],
+      "description": "Management level access to all modules",
+      "displayName": "Manager",
+      "id": "e2f6a9b4-9d8c-5b3f-a02e-7c5d4e3b2e9f",
+      "isEnabled": true,
+      "origin": "Application",
+      "value": "Manager"
+    },
+    {
+      "allowedMemberTypes": [
+        "User"
+      ],
+      "description": "Full system access and administrative privileges",
+      "displayName": "Administrator",
+      "id": "d1e5f9a3-8c7b-4a2e-9f1d-6b4c3e2a1d8f",
+      "isEnabled": true,
+      "origin": "Application",
+      "value": "Administrator"
+    }
+  ],
+  "TestDate": "2025-08-13 12:14:16",
+  "TenantId": "2bf8eca0-5705-47f9-bad9-10a86ef58a19",
+  "IdentifierUriConfigured": [
+    "api://5dfd53af-7a13-49c7-8bb2-fa329b619774"
+  ],
+  "ApplicationId": "5dfd53af-7a13-49c7-8bb2-fa329b619774",
+  "CustomScopesConfigured": [
+    {
+      "adminConsentDescription": "Allows the app to perform administrative functions on bus leasing data on behalf of the signed-in user",
+      "adminConsentDisplayName": "Administer bus leasing data",
+      "id": "c7f5d9a3-9e6b-4c2d-b18f-7d4e5c3b2f9c",
+      "isEnabled": true,
+      "type": "Admin",
+      "userConsentDescription": "Allow the app to perform administrative functions on bus leasing data on your behalf",
+      "userConsentDisplayName": "Administer bus leasing data",
+      "value": "BusLeasing.Admin"
+    },
+    {
+      "adminConsentDescription": "Allows the app to create and update bus leasing data on behalf of the signed-in user",
+      "adminConsentDisplayName": "Write bus leasing data",
+      "id": "b9e4c8f2-8d5a-3f1b-a07e-9c6d4b2f1e8a",
+      "isEnabled": true,
+      "type": "User",
+      "userConsentDescription": "Allow the app to create and update bus leasing data on your behalf",
+      "userConsentDisplayName": "Create and update your bus leasing data",
+      "value": "BusLeasing.Write"
+    },
+    {
+      "adminConsentDescription": "Allows the app to read bus leasing data on behalf of the signed-in user",
+      "adminConsentDisplayName": "Read bus leasing data",
+      "id": "a8f3d9e1-7c4b-4e2a-9f6d-8b5c3a1e0d7f",
+      "isEnabled": true,
+      "type": "User",
+      "userConsentDescription": "Allow the app to read bus leasing data on your behalf",
+      "userConsentDisplayName": "Read your bus leasing data",
+      "value": "BusLeasing.Read"
+    }
+  ],
+  "ServicePrincipalExists": true,
+  "GraphPermissionsConfigured": true
+}

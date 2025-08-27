@@ -1,0 +1,42 @@
+# IDE
+.vscode/
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
+
+# Secrets (never commit these)
+*.key
+*.pem
+*.pfx
+*.p12
+secrets/
+*-secrets.yaml
+*-secret.yaml
+
+# Helm
+*.tgz
+charts/**/charts/
+requirements.lock
+
+# Terraform (if used)
+*.tfstate
+*.tfstate.*
+.terraform/
+terraform.tfvars
+
+# Environment specific values (if containing secrets)
+values-*.secret.yaml
+
+# Logs
+*.log

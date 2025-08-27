@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: argocd
+
+resources:
+  # Official ArgoCD installation
+  - https://raw.githubusercontent.com/argoproj/argo-cd/v2.11.0/manifests/install.yaml
+  # Azure AD OIDC configuration
+  - argocd-cm-patch.yaml
+  # RBAC configuration
+  - argocd-rbac-cm.yaml
+  # Server configuration for ingress
+  - argocd-server-patch.yaml
+  # Azure Key Vault integration
+  - secrets-store-csi-driver.yaml

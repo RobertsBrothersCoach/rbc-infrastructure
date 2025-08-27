@@ -1,0 +1,68 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: production
+  namespace: argocd
+spec:
+  description: Production project with restricted access
+  
+  sourceRepos:
+    - 'https://github.com/your-org/rbc-infrastructure'
+  
+  destinations:
+    - namespace: 'leasing-app-prod'
+      server: https://kubernetes.default.svc
+    - namespace: 'argocd'
+      server: https://kubernetes.default.svc
+  
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+  
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  
+  roles:
+    - name: admin
+      policies:
+        - p, proj:production:admin, applications, *, production/*, allow
+        - p, proj:production:admin, repositories, *, *, allow
+      groups:
+        - YOUR_AZURE_AD_ADMIN_GROUP_ID
+    
+    - name: developer
+      policies:
+        - p, proj:production:developer, applications, get, production/*, allow
+        - p, proj:production:developer, applications, sync, production/*, deny
+      groups:
+        - YOUR_AZURE_AD_DEV_GROUP_ID
+    
+    - name: readonly
+      policies:
+        - p, proj:production:readonly, applications, get, production/*, allow
+      groups:
+        - YOUR_AZURE_AD_READONLY_GROUP_ID
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: default
+  namespace: argocd
+spec:
+  description: Default project for non-production environments
+  
+  sourceRepos:
+    - '*'
+  
+  destinations:
+    - namespace: '*'
+      server: '*'
+  
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'

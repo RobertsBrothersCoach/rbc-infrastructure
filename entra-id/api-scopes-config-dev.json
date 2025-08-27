@@ -1,0 +1,19 @@
+{
+  "ApplicationId": "5dfd53af-7a13-49c7-8bb2-fa329b619774",
+  "ScopeEndpoint": "api://5dfd53af-7a13-49c7-8bb2-fa329b619774",
+  "ConfiguredDate": "2025-08-13 12:11:27",
+  "TenantId": "2bf8eca0-5705-47f9-bad9-10a86ef58a19",
+  "CustomScopes": [
+    "BusLeasing.Read",
+    "BusLeasing.Write",
+    "BusLeasing.Admin"
+  ],
+  "Environment": "dev",
+  "GraphPermissions": [
+    "User.Read",
+    "GroupMember.Read.All",
+    "openid",
+    "profile",
+    "email"
+  ]
+}

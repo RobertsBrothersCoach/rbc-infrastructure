@@ -1,0 +1,270 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "description": "Database connection pooling and optimization configuration for RBC Leasing App",
+  "parameters": {
+    "environmentName": {
+      "type": "string",
+      "allowedValues": ["dev", "qa", "prod"],
+      "metadata": {
+        "description": "Environment name"
+      }
+    },
+    "postgresqlServerName": {
+      "type": "string",
+      "metadata": {
+        "description": "PostgreSQL server name"
+      }
+    },
+    "sslCertificate": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "SSL certificate for production database connections (optional, required for production)"
+      }
+    }
+  },
+  "variables": {
+    "connectionPoolConfigs": {
+      "dev": {
+        "maxConnections": 25,
+        "minConnections": 5,
+        "connectionTimeout": 30,
+        "idleTimeout": 300,
+        "maxIdleTime": 600,
+        "statementTimeout": 60000,
+        "queryTimeout": 30000,
+        "poolSize": 10,
+        "maxPoolSize": 25,
+        "allowExitOnIdle": true,
+        "enablePgBouncer": false,
+        "pgBouncerMode": "session",
+        "defaultPoolMode": "session",
+        "serverIdleTimeout": 600,
+        "serverLifetime": 3600,
+        "serverConnectTimeout": 15,
+        "queryWaitTimeout": 120,
+        "clientIdleTimeout": 0,
+        "clientLoginTimeout": 60,
+        "reservePoolSize": 5,
+        "reservePoolTimeout": 3,
+        "maxClientConn": 100,
+        "defaultPoolSize": 10,
+        "minPoolSize": 0,
+        "logConnections": 1,
+        "logDisconnections": 1,
+        "logPoolerErrors": 1,
+        "applicationName": "rbc-leasing-dev"
+      },
+      "qa": {
+        "maxConnections": 50,
+        "minConnections": 10,
+        "connectionTimeout": 30,
+        "idleTimeout": 300,
+        "maxIdleTime": 600,
+        "statementTimeout": 60000,
+        "queryTimeout": 30000,
+        "poolSize": 20,
+        "maxPoolSize": 50,
+        "allowExitOnIdle": false,
+        "enablePgBouncer": true,
+        "pgBouncerMode": "transaction",
+        "defaultPoolMode": "transaction",
+        "serverIdleTimeout": 600,
+        "serverLifetime": 3600,
+        "serverConnectTimeout": 15,
+        "queryWaitTimeout": 120,
+        "clientIdleTimeout": 0,
+        "clientLoginTimeout": 60,
+        "reservePoolSize": 10,
+        "reservePoolTimeout": 3,
+        "maxClientConn": 200,
+        "defaultPoolSize": 20,
+        "minPoolSize": 5,
+        "logConnections": 1,
+        "logDisconnections": 1,
+        "logPoolerErrors": 1,
+        "applicationName": "rbc-leasing-qa"
+      },
+      "prod": {
+        "maxConnections": 100,
+        "minConnections": 20,
+        "connectionTimeout": 20,
+        "idleTimeout": 180,
+        "maxIdleTime": 300,
+        "statementTimeout": 30000,
+        "queryTimeout": 20000,
+        "poolSize": 50,
+        "maxPoolSize": 100,
+        "allowExitOnIdle": false,
+        "enablePgBouncer": true,
+        "pgBouncerMode": "transaction",
+        "defaultPoolMode": "transaction",
+        "serverIdleTimeout": 300,
+        "serverLifetime": 1800,
+        "serverConnectTimeout": 10,
+        "queryWaitTimeout": 60,
+        "clientIdleTimeout": 0,
+        "clientLoginTimeout": 30,
+        "reservePoolSize": 25,
+        "reservePoolTimeout": 2,
+        "maxClientConn": 500,
+        "defaultPoolSize": 50,
+        "minPoolSize": 10,
+        "logConnections": 0,
+        "logDisconnections": 0,
+        "logPoolerErrors": 1,
+        "applicationName": "rbc-leasing-prod"
+      }
+    },
+    "currentConfig": "[variables('connectionPoolConfigs')[parameters('environmentName')]]",
+    "performanceOptimizations": {
+      "dev": {
+        "sharedBuffers": "256MB",
+        "effectiveCacheSize": "1GB",
+        "maintenanceWorkMem": "64MB",
+        "checkpointCompletionTarget": 0.7,
+        "walBuffers": "8MB",
+        "defaultStatisticsTarget": 100,
+        "randomPageCost": 1.1,
+        "effectiveIoConcurrency": 200,
+        "workMem": "4MB",
+        "minWalSize": "1GB",
+        "maxWalSize": "2GB",
+        "maxWorkerProcesses": 8,
+        "maxParallelWorkersPerGather": 2,
+        "maxParallelWorkers": 8,
+        "maxParallelMaintenanceWorkers": 2
+      },
+      "qa": {
+        "sharedBuffers": "512MB",
+        "effectiveCacheSize": "2GB",
+        "maintenanceWorkMem": "128MB",
+        "checkpointCompletionTarget": 0.8,
+        "walBuffers": "16MB",
+        "defaultStatisticsTarget": 100,
+        "randomPageCost": 1.1,
+        "effectiveIoConcurrency": 200,
+        "workMem": "8MB",
+        "minWalSize": "2GB",
+        "maxWalSize": "4GB",
+        "maxWorkerProcesses": 16,
+        "maxParallelWorkersPerGather": 4,
+        "maxParallelWorkers": 16,
+        "maxParallelMaintenanceWorkers": 4
+      },
+      "prod": {
+        "sharedBuffers": "2GB",
+        "effectiveCacheSize": "8GB",
+        "maintenanceWorkMem": "512MB",
+        "checkpointCompletionTarget": 0.9,
+        "walBuffers": "64MB",
+        "defaultStatisticsTarget": 200,
+        "randomPageCost": 1.0,
+        "effectiveIoConcurrency": 300,
+        "workMem": "16MB",
+        "minWalSize": "4GB",
+        "maxWalSize": "8GB",
+        "maxWorkerProcesses": 32,
+        "maxParallelWorkersPerGather": 8,
+        "maxParallelWorkers": 32,
+        "maxParallelMaintenanceWorkers": 8
+      }
+    }
+  },
+  "resources": [],
+  "outputs": {
+    "connectionPoolConfig": {
+      "type": "object",
+      "value": "[variables('currentConfig')]"
+    },
+    "sequelizeConfig": {
+      "type": "object",
+      "value": {
+        "pool": {
+          "max": "[variables('currentConfig').maxPoolSize]",
+          "min": "[variables('currentConfig').minPoolSize]",
+          "acquire": "[mul(variables('currentConfig').connectionTimeout, 1000)]",
+          "idle": "[mul(variables('currentConfig').idleTimeout, 1000)]",
+          "evict": 1000,
+          "handleDisconnects": true,
+          "validate": true
+        },
+        "dialectOptions": {
+          "ssl": "[if(equals(parameters('environmentName'), 'prod'), createObject('require', true(), 'rejectUnauthorized', true(), 'ca', parameters('sslCertificate')), null())]",
+          "connectTimeout": "[mul(variables('currentConfig').connectionTimeout, 1000)]",
+          "statement_timeout": "[variables('currentConfig').statementTimeout]",
+          "query_timeout": "[variables('currentConfig').queryTimeout]",
+          "idle_in_transaction_session_timeout": "[mul(variables('currentConfig').idleTimeout, 1000)]",
+          "application_name": "[variables('currentConfig').applicationName]"
+        },
+        "retry": {
+          "max": 3,
+          "match": [
+            "ETIMEDOUT",
+            "EHOSTUNREACH",
+            "ECONNRESET",
+            "ECONNREFUSED",
+            "ETIMEDOUT",
+            "ESOCKETTIMEDOUT",
+            "EHOSTUNREACH",
+            "EPIPE",
+            "EAI_AGAIN"
+          ]
+        },
+        "logging": "[if(equals(parameters('environmentName'), 'dev'), true(), false())]"
+      }
+    },
+    "pgBouncerConfig": {
+      "type": "object",
+      "value": {
+        "enabled": "[variables('currentConfig').enablePgBouncer]",
+        "databases": {
+          "rbc_leasing": {
+            "host": "[concat(parameters('postgresqlServerName'), '.postgres.database.azure.com')]",
+            "port": 5432,
+            "pool_mode": "[variables('currentConfig').pgBouncerMode]",
+            "max_db_connections": "[variables('currentConfig').maxConnections]",
+            "pool_size": "[variables('currentConfig').defaultPoolSize]",
+            "reserve_pool": "[variables('currentConfig').reservePoolSize]",
+            "reserve_pool_timeout": "[variables('currentConfig').reservePoolTimeout]"
+          }
+        },
+        "pgbouncer": {
+          "listen_addr": "*",
+          "listen_port": 6432,
+          "auth_type": "md5",
+          "auth_file": "/etc/pgbouncer/userlist.txt",
+          "pool_mode": "[variables('currentConfig').defaultPoolMode]",
+          "server_reset_query": "DISCARD ALL",
+          "server_check_query": "SELECT 1",
+          "server_check_delay": 30,
+          "max_client_conn": "[variables('currentConfig').maxClientConn]",
+          "default_pool_size": "[variables('currentConfig').defaultPoolSize]",
+          "min_pool_size": "[variables('currentConfig').minPoolSize]",
+          "reserve_pool_size": "[variables('currentConfig').reservePoolSize]",
+          "reserve_pool_timeout": "[variables('currentConfig').reservePoolTimeout]",
+          "server_lifetime": "[variables('currentConfig').serverLifetime]",
+          "server_idle_timeout": "[variables('currentConfig').serverIdleTimeout]",
+          "server_connect_timeout": "[variables('currentConfig').serverConnectTimeout]",
+          "server_login_retry": 15,
+          "query_wait_timeout": "[variables('currentConfig').queryWaitTimeout]",
+          "client_idle_timeout": "[variables('currentConfig').clientIdleTimeout]",
+          "client_login_timeout": "[variables('currentConfig').clientLoginTimeout]",
+          "log_connections": "[variables('currentConfig').logConnections]",
+          "log_disconnections": "[variables('currentConfig').logDisconnections]",
+          "log_pooler_errors": "[variables('currentConfig').logPoolerErrors]",
+          "stats_period": 60,
+          "tcp_keepalive": 1,
+          "tcp_keepidle": 4,
+          "tcp_keepintvl": 2,
+          "tcp_keepcnt": 2
+        }
+      }
+    },
+    "performanceSettings": {
+      "type": "object",
+      "value": "[variables('performanceOptimizations')[parameters('environmentName')]]"
+    }
+  }
+}
