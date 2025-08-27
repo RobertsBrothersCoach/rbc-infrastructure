@@ -52,7 +52,11 @@
       "Bash(kubectl get service:*)",
       "Bash(kubectl:*)",
       "Bash(az network public-ip list:*)",
-      "Bash(az network list-usages:*)"
+      "Bash(az network list-usages:*)",
+      "Bash(git checkout:*)",
+      "Bash(gh pr create:*)",
+      "Bash(az ad sp list:*)",
+      "Bash($SCOPE=\"/subscriptions/026185ca-7fce-4ff3-9790-bc4ecdebc550\")"
     ],
     "deny": [],
     "ask": [],

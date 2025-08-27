@@ -15,9 +15,9 @@ param backupRegion string = 'westcentralus'
 @description('Enable auto-shutdown for non-production')
 param enableAutoShutdown bool = environmentName != 'prod'
 
-@description('PostgreSQL administrator password')
+@description('PostgreSQL administrator password - if empty, will be auto-generated')
 @secure()
-param administratorPassword string
+param administratorPassword string = ''
 
 // Resource Group
 resource resourceGroup 'Microsoft.Resources/resourceGroups@2023-07-01' = {
@@ -81,6 +81,21 @@ module keyVault 'modules/key-vault.bicep' = {
   ]
 }
 
+// Generate PostgreSQL password in Key Vault
+module postgresPasswordGenerator 'modules/keyvault-password-generator.bicep' = {
+  scope: resourceGroup
+  name: 'postgresPassword-${environmentName}'
+  params: {
+    keyVaultName: keyVault.outputs.name
+    environmentName: environmentName
+    passwordPurpose: 'postgresql-admin'
+    existingPassword: administratorPassword // Use provided password if available, otherwise generate
+  }
+  dependsOn: [
+    keyVault
+  ]
+}
+
 // Deploy cost-effective AKS cluster for GitOps
 module aksCluster 'modules/aks-cost-effective.bicep' = {
   scope: resourceGroup
@@ -109,9 +124,12 @@ module postgresql 'modules/postgresql.bicep' = {
     enableHA: environmentName == 'prod'
     backupRegion: backupRegion
     keyVaultName: keyVault.outputs.name
-    administratorPassword: administratorPassword
+    administratorPassword: !empty(administratorPassword) ? administratorPassword : 'TempP@ss123!' // Temp password, will be rotated
     logAnalyticsWorkspaceId: monitoring.outputs.workspaceId
   }
+  dependsOn: [
+    postgresPasswordGenerator
+  ]
 }
 
 module redis 'modules/redis.bicep' = {

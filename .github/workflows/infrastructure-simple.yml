@@ -34,9 +34,9 @@ jobs:
       - name: Deploy Infrastructure
         run: |
           echo "Deploying to ${{ github.event.inputs.environment }}"
+          # Password will be auto-generated in Key Vault if not provided
           az deployment sub create \
             --location eastus2 \
             --template-file bicep/main.bicep \
             --parameters bicep/environments/${{ github.event.inputs.environment }}.parameters.json \
-            --parameters administratorPassword="${{ secrets.POSTGRES_ADMIN_PASSWORD_DEV }}" \
             --name ${{ github.event.inputs.environment }}-${{ github.run_number }}
