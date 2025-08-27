@@ -13,8 +13,8 @@ param logAnalyticsWorkspaceId string
 @description('Enable auto-shutdown for cost savings')
 param enableAutoShutdown bool = environmentName != 'prod'
 
-@description('Minimum node count (0 for cost savings in dev)')
-param minNodeCount int = environmentName == 'prod' ? 1 : 0
+@description('Minimum node count (1 minimum for system pools)')
+param minNodeCount int = 1
 
 @description('Maximum node count')
 param maxNodeCount int = environmentName == 'prod' ? 5 : 3
@@ -171,13 +171,13 @@ output kubernetesVersion string = aksCluster.properties.kubernetesVersion
 output nodeResourceGroup string = aksCluster.properties.nodeResourceGroup
 
 // Cost information
-output estimatedMonthlyCost string = environmentName == 'prod' ? '$200-400' : '$50-100'
+output estimatedMonthlyCost string = environmentName == 'prod' ? '$200-400' : '$70-120'
 output costOptimizationFeatures array = [
-  'Auto-scaling with scale-to-zero (dev)'
+  'Minimal system pool (1 node for dev)'
   'Kubenet networking (vs Azure CNI)'
   'Basic load balancer (dev)'
   'Minimal OS disk (30GB)'
   'Cost-effective VM sizes (B2s for dev)'
   'Auto-shutdown scheduling (dev)'
-  'Single node for system pool (dev)'
+  'Auto-scaling 1-3 nodes based on demand'
 ]

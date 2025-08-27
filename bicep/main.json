@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.37.4.10188",
-      "templateHash": "12160694267309952969"
+      "templateHash": "6987859540532549394"
     }
   },
   "parameters": {
@@ -1127,7 +1127,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.37.4.10188",
-              "templateHash": "7235478921645212576"
+              "templateHash": "17394411479518939250"
             }
           },
           "parameters": {
@@ -1165,9 +1165,9 @@
             },
             "minNodeCount": {
               "type": "int",
-              "defaultValue": "[if(equals(parameters('environmentName'), 'prod'), 1, 0)]",
+              "defaultValue": 1,
               "metadata": {
-                "description": "Minimum node count (0 for cost savings in dev)"
+                "description": "Minimum node count (1 minimum for system pools)"
               }
             },
             "maxNodeCount": {
@@ -1343,18 +1343,18 @@
             },
             "estimatedMonthlyCost": {
               "type": "string",
-              "value": "[if(equals(parameters('environmentName'), 'prod'), '$200-400', '$50-100')]"
+              "value": "[if(equals(parameters('environmentName'), 'prod'), '$200-400', '$70-120')]"
             },
             "costOptimizationFeatures": {
               "type": "array",
               "value": [
-                "Auto-scaling with scale-to-zero (dev)",
+                "Minimal system pool (1 node for dev)",
                 "Kubenet networking (vs Azure CNI)",
                 "Basic load balancer (dev)",
                 "Minimal OS disk (30GB)",
                 "Cost-effective VM sizes (B2s for dev)",
                 "Auto-shutdown scheduling (dev)",
-                "Single node for system pool (dev)"
+                "Auto-scaling 1-3 nodes based on demand"
               ]
             }
           }
