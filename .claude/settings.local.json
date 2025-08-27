@@ -12,7 +12,11 @@
       "Bash(az ad sp create-for-rbac:*)",
       "Bash(gh api:*)",
       "Bash(gh secret set:*)",
-      "Bash(gh secret list:*)"
+      "Bash(gh secret list:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(gh workflow run:*)",
+      "Bash(gh workflow:*)"
     ],
     "deny": [],
     "ask": []
