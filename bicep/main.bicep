@@ -159,8 +159,16 @@ var servicePrincipalIds = [
   aksCluster.outputs.principalId
 ]
 
-// Role assignments removed due to service principal permission limitations
-// Key Vault access will be configured manually after deployment
+// Assign Key Vault access to all service principals
+module roleAssignments 'modules/role-assignments.bicep' = {
+  scope: resourceGroup
+  name: 'roleAssignments-${environmentName}'
+  params: {
+    keyVaultId: keyVault.outputs.id
+    principalIds: servicePrincipalIds
+    environmentName: environmentName
+  }
+}
 
 // Outputs
 output resourceGroupName string = resourceGroup.name

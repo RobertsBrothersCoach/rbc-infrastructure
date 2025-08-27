@@ -24,7 +24,10 @@
       "Bash(az aks list:*)",
       "Bash(az role assignment create:*)",
       "Bash(az account set:*)",
-      "Bash(az deployment group list:*)"
+      "Bash(az deployment group list:*)",
+      "Bash(az role assignment list:*)",
+      "Bash(az login:*)",
+      "Bash(az ad sp show:*)"
     ],
     "deny": [],
     "ask": []
