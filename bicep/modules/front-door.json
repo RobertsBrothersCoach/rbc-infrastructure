@@ -1,0 +1,119 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.37.4.10188",
+      "templateHash": "18299574697495689604"
+    }
+  },
+  "parameters": {
+    "environmentName": {
+      "type": "string",
+      "metadata": {
+        "description": "Environment name"
+      }
+    },
+    "backendAddress": {
+      "type": "string",
+      "metadata": {
+        "description": "Backend address"
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Cdn/profiles",
+      "apiVersion": "2023-05-01",
+      "name": "[format('fd-rbc-{0}', parameters('environmentName'))]",
+      "location": "Global",
+      "sku": {
+        "name": "Standard_AzureFrontDoor"
+      },
+      "properties": {
+        "originResponseTimeoutSeconds": 60
+      }
+    },
+    {
+      "type": "Microsoft.Cdn/profiles/afdEndpoints",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}', format('fd-rbc-{0}', parameters('environmentName')), format('rbc-{0}', parameters('environmentName')))]",
+      "location": "Global",
+      "properties": {
+        "enabledState": "Enabled"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Cdn/profiles', format('fd-rbc-{0}', parameters('environmentName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Cdn/profiles/originGroups",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}', format('fd-rbc-{0}', parameters('environmentName')), 'default-origin-group')]",
+      "properties": {
+        "loadBalancingSettings": {
+          "sampleSize": 4,
+          "successfulSamplesRequired": 3,
+          "additionalLatencyInMilliseconds": 50
+        },
+        "healthProbeSettings": {
+          "probePath": "/health",
+          "probeRequestType": "GET",
+          "probeProtocol": "Https",
+          "probeIntervalInSeconds": 30
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Cdn/profiles', format('fd-rbc-{0}', parameters('environmentName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Cdn/profiles/originGroups/origins",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}/{2}', format('fd-rbc-{0}', parameters('environmentName')), 'default-origin-group', 'container-app-origin')]",
+      "properties": {
+        "hostName": "[parameters('backendAddress')]",
+        "httpPort": 80,
+        "httpsPort": 443,
+        "originHostHeader": "[parameters('backendAddress')]",
+        "priority": 1,
+        "weight": 1000,
+        "enabledState": "Enabled"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Cdn/profiles/originGroups', format('fd-rbc-{0}', parameters('environmentName')), 'default-origin-group')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Cdn/profiles/afdEndpoints/routes",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}/{2}', format('fd-rbc-{0}', parameters('environmentName')), format('rbc-{0}', parameters('environmentName')), 'default-route')]",
+      "properties": {
+        "originGroup": {
+          "id": "[resourceId('Microsoft.Cdn/profiles/originGroups', format('fd-rbc-{0}', parameters('environmentName')), 'default-origin-group')]"
+        },
+        "supportedProtocols": [
+          "Http",
+          "Https"
+        ],
+        "patternsToMatch": [
+          "/*"
+        ],
+        "forwardingProtocol": "HttpsOnly",
+        "linkToDefaultDomain": "Enabled",
+        "httpsRedirect": "Enabled"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Cdn/profiles/afdEndpoints', format('fd-rbc-{0}', parameters('environmentName')), format('rbc-{0}', parameters('environmentName')))]",
+        "[resourceId('Microsoft.Cdn/profiles/originGroups', format('fd-rbc-{0}', parameters('environmentName')), 'default-origin-group')]"
+      ]
+    }
+  ],
+  "outputs": {
+    "url": {
+      "type": "string",
+      "value": "[format('https://{0}', reference(resourceId('Microsoft.Cdn/profiles/afdEndpoints', format('fd-rbc-{0}', parameters('environmentName')), format('rbc-{0}', parameters('environmentName'))), '2023-05-01').hostName)]"
+    }
+  }
+}

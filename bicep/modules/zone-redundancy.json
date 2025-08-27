@@ -1,0 +1,304 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.37.4.10188",
+      "templateHash": "17667827521975077072"
+    }
+  },
+  "parameters": {
+    "environmentName": {
+      "type": "string",
+      "metadata": {
+        "description": "Environment name"
+      }
+    },
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "Location for resources"
+      }
+    }
+  },
+  "variables": {
+    "zoneSupport": {
+      "eastus": {
+        "hasZones": true,
+        "zones": [
+          "1",
+          "2",
+          "3"
+        ],
+        "services": {
+          "postgresql": true,
+          "redis": true,
+          "appService": true,
+          "containerApps": true,
+          "storage": true,
+          "keyvault": false
+        }
+      },
+      "eastus2": {
+        "hasZones": true,
+        "zones": [
+          "1",
+          "2",
+          "3"
+        ],
+        "services": {
+          "postgresql": true,
+          "redis": true,
+          "appService": true,
+          "containerApps": true,
+          "storage": true,
+          "keyvault": false
+        }
+      },
+      "westcentralus": {
+        "hasZones": false,
+        "zones": [],
+        "services": {
+          "postgresql": false,
+          "redis": false,
+          "appService": false,
+          "containerApps": false,
+          "storage": false,
+          "keyvault": false
+        }
+      },
+      "westus2": {
+        "hasZones": true,
+        "zones": [
+          "1",
+          "2",
+          "3"
+        ],
+        "services": {
+          "postgresql": true,
+          "redis": true,
+          "appService": true,
+          "containerApps": true,
+          "storage": true,
+          "keyvault": false
+        }
+      }
+    },
+    "currentZoneConfig": "[if(contains(variables('zoneSupport'), parameters('location')), variables('zoneSupport')[parameters('location')], createObject('hasZones', false(), 'zones', createArray(), 'services', createObject()))]",
+    "isProduction": "[equals(parameters('environmentName'), 'prod')]",
+    "enableZoneRedundancy": "[and(variables('isProduction'), variables('currentZoneConfig').hasZones)]"
+  },
+  "resources": [],
+  "outputs": {
+    "postgresqlZoneConfig": {
+      "type": "object",
+      "value": {
+        "enableHA": "[and(variables('enableZoneRedundancy'), variables('currentZoneConfig').services.postgresql)]",
+        "primaryZone": "[if(variables('enableZoneRedundancy'), '1', '')]",
+        "standbyZone": "[if(variables('enableZoneRedundancy'), '2', '')]",
+        "backupRedundancy": "[if(variables('isProduction'), 'GeoRedundant', 'LocallyRedundant')]",
+        "highAvailability": {
+          "mode": "[if(variables('enableZoneRedundancy'), 'ZoneRedundant', 'Disabled')]",
+          "standbyAvailabilityZone": "[if(variables('enableZoneRedundancy'), '2', '')]"
+        }
+      }
+    },
+    "redisZoneConfig": {
+      "type": "object",
+      "value": {
+        "sku": "[if(variables('isProduction'), 'Premium', 'Basic')]",
+        "enableZoneRedundancy": "[and(variables('enableZoneRedundancy'), variables('currentZoneConfig').services.redis)]",
+        "zones": "[if(variables('enableZoneRedundancy'), variables('currentZoneConfig').zones, createArray())]",
+        "replicasPerMaster": "[if(variables('isProduction'), 2, 0)]",
+        "replicasPerPrimary": "[if(variables('isProduction'), 2, 0)]",
+        "configuration": {
+          "maxmemory-policy": "allkeys-lru",
+          "rdb-backup-enabled": "[if(variables('isProduction'), 'true', 'false')]",
+          "rdb-backup-frequency": "[if(variables('isProduction'), '60', '')]",
+          "rdb-backup-max-snapshot-count": "[if(variables('isProduction'), '1', '')]",
+          "aof-backup-enabled": "[if(variables('isProduction'), 'true', 'false')]"
+        }
+      }
+    },
+    "appServiceZoneConfig": {
+      "type": "object",
+      "value": {
+        "sku": "[if(variables('isProduction'), 'P1v3', 'B1')]",
+        "capacity": "[if(variables('enableZoneRedundancy'), 3, 1)]",
+        "zoneRedundant": "[and(variables('enableZoneRedundancy'), variables('currentZoneConfig').services.appService)]",
+        "alwaysOn": "[variables('isProduction')]",
+        "autoHealEnabled": "[variables('isProduction')]",
+        "healthCheckPath": "/health",
+        "loadBalancing": "[if(variables('enableZoneRedundancy'), 'LeastRequests', 'RoundRobin')]"
+      }
+    },
+    "containerAppsZoneConfig": {
+      "type": "object",
+      "value": {
+        "zoneRedundant": "[and(variables('enableZoneRedundancy'), variables('currentZoneConfig').services.containerApps)]",
+        "minReplicas": "[if(variables('isProduction'), 3, 0)]",
+        "maxReplicas": "[if(variables('isProduction'), 30, 3)]",
+        "scaleRules": [
+          {
+            "name": "http-requests",
+            "http": {
+              "metadata": {
+                "concurrentRequests": "[if(variables('isProduction'), '100', '30')]"
+              }
+            }
+          },
+          {
+            "name": "cpu-utilization",
+            "custom": {
+              "type": "cpu",
+              "metadata": {
+                "type": "Utilization",
+                "value": "[if(variables('isProduction'), '60', '70')]"
+              }
+            }
+          },
+          {
+            "name": "memory-utilization",
+            "custom": {
+              "type": "memory",
+              "metadata": {
+                "type": "Utilization",
+                "value": "[if(variables('isProduction'), '70', '80')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "storageZoneConfig": {
+      "type": "object",
+      "value": {
+        "sku": "[if(variables('isProduction'), 'Standard_ZRS', 'Standard_LRS')]",
+        "kind": "StorageV2",
+        "accessTier": "Hot",
+        "supportsHttpsTrafficOnly": true,
+        "minimumTlsVersion": "TLS1_2",
+        "allowBlobPublicAccess": false,
+        "networkAcls": {
+          "defaultAction": "[if(variables('isProduction'), 'Deny', 'Allow')]",
+          "bypass": "AzureServices"
+        },
+        "encryption": {
+          "services": {
+            "blob": {
+              "enabled": true
+            },
+            "file": {
+              "enabled": true
+            },
+            "table": {
+              "enabled": true
+            },
+            "queue": {
+              "enabled": true
+            }
+          },
+          "keySource": "Microsoft.Storage"
+        }
+      }
+    },
+    "vmssZoneConfig": {
+      "type": "object",
+      "value": {
+        "zones": "[if(variables('enableZoneRedundancy'), variables('currentZoneConfig').zones, createArray('1'))]",
+        "platformFaultDomainCount": "[if(variables('enableZoneRedundancy'), 5, 2)]",
+        "zoneBalance": "[variables('enableZoneRedundancy')]",
+        "overprovision": "[not(variables('isProduction'))]",
+        "upgradePolicy": {
+          "mode": "[if(variables('isProduction'), 'Rolling', 'Manual')]",
+          "rollingUpgradePolicy": "[if(variables('isProduction'), createObject('maxBatchInstancePercent', 20, 'maxUnhealthyInstancePercent', 20, 'maxUnhealthyUpgradedInstancePercent', 20, 'pauseTimeBetweenBatches', 'PT5S'), null())]"
+        }
+      }
+    },
+    "loadBalancerZoneConfig": {
+      "type": "object",
+      "value": {
+        "sku": {
+          "name": "[if(variables('isProduction'), 'Standard', 'Basic')]",
+          "tier": "Regional"
+        },
+        "frontendIPConfigurations": [
+          {
+            "zones": "[if(variables('enableZoneRedundancy'), variables('currentZoneConfig').zones, createArray())]",
+            "properties": {
+              "publicIPAddressVersion": "IPv4"
+            }
+          }
+        ]
+      }
+    },
+    "zoneHealthMonitoring": {
+      "type": "object",
+      "value": {
+        "enabled": "[variables('isProduction')]",
+        "alerts": [
+          {
+            "name": "zone-failure-alert",
+            "description": "Alert when a zone becomes unhealthy",
+            "severity": 1,
+            "evaluationFrequency": "PT1M",
+            "windowSize": "PT5M"
+          },
+          {
+            "name": "cross-zone-latency-alert",
+            "description": "Alert on high cross-zone latency",
+            "severity": 2,
+            "evaluationFrequency": "PT5M",
+            "windowSize": "PT15M",
+            "threshold": 100
+          },
+          {
+            "name": "zone-imbalance-alert",
+            "description": "Alert when traffic is not balanced across zones",
+            "severity": 3,
+            "evaluationFrequency": "PT5M",
+            "windowSize": "PT15M",
+            "threshold": 30
+          }
+        ],
+        "dashboards": [
+          {
+            "name": "zone-health-dashboard",
+            "widgets": [
+              "Zone Availability Status",
+              "Cross-Zone Traffic Distribution",
+              "Zone Failover History",
+              "Resource Distribution by Zone"
+            ]
+          }
+        ]
+      }
+    },
+    "disasterRecoveryConfig": {
+      "type": "object",
+      "value": {
+        "enabled": "[variables('isProduction')]",
+        "primaryRegion": "[parameters('location')]",
+        "secondaryRegion": "[if(equals(parameters('location'), 'eastus2'), 'westcentralus', 'eastus2')]",
+        "rpo": "[if(variables('isProduction'), 4, 24)]",
+        "rto": "[if(variables('isProduction'), 1, 4)]",
+        "backupRetention": "[if(variables('isProduction'), 35, 7)]",
+        "geoReplication": "[variables('isProduction')]",
+        "automaticFailover": "[and(variables('isProduction'), variables('enableZoneRedundancy'))]"
+      }
+    },
+    "zoneRedundancySummary": {
+      "type": "object",
+      "value": {
+        "location": "[parameters('location')]",
+        "environment": "[parameters('environmentName')]",
+        "hasZoneSupport": "[variables('currentZoneConfig').hasZones]",
+        "availableZones": "[variables('currentZoneConfig').zones]",
+        "zoneRedundancyEnabled": "[variables('enableZoneRedundancy')]",
+        "servicesWithZoneRedundancy": "[if(variables('enableZoneRedundancy'), createArray(if(variables('currentZoneConfig').services.postgresql, 'PostgreSQL', ''), if(variables('currentZoneConfig').services.redis, 'Redis', ''), if(variables('currentZoneConfig').services.appService, 'App Service', ''), if(variables('currentZoneConfig').services.containerApps, 'Container Apps', ''), if(variables('currentZoneConfig').services.storage, 'Storage', '')), createArray())]",
+        "recommendations": "[if(and(not(variables('enableZoneRedundancy')), variables('isProduction')), createArray('Consider deploying to a region with availability zone support', format('Current region {0} does not support zone redundancy', parameters('location')), 'Recommended regions: eastus, eastus2, westus2'), createArray())]"
+      }
+    }
+  }
+}

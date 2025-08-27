@@ -1,0 +1,2302 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.37.4.10188",
+      "templateHash": "12160694267309952969"
+    }
+  },
+  "parameters": {
+    "environmentName": {
+      "type": "string",
+      "allowedValues": [
+        "dev",
+        "qa",
+        "prod"
+      ],
+      "metadata": {
+        "description": "Environment name"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "eastus2",
+      "allowedValues": [
+        "eastus2",
+        "westcentralus",
+        "eastus"
+      ],
+      "metadata": {
+        "description": "Azure region for resources - Primary region with availability zones"
+      }
+    },
+    "backupRegion": {
+      "type": "string",
+      "defaultValue": "westcentralus",
+      "allowedValues": [
+        "westcentralus",
+        "eastus2",
+        "westus2"
+      ],
+      "metadata": {
+        "description": "Backup region for disaster recovery"
+      }
+    },
+    "enableAutoShutdown": {
+      "type": "bool",
+      "defaultValue": "[not(equals(parameters('environmentName'), 'prod'))]",
+      "metadata": {
+        "description": "Enable auto-shutdown for non-production"
+      }
+    },
+    "administratorPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "PostgreSQL administrator password"
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2023-07-01",
+      "name": "[format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))]",
+      "location": "[parameters('location')]",
+      "tags": {
+        "Environment": "[parameters('environmentName')]",
+        "Application": "RBCLeasingApp",
+        "ManagedBy": "Bicep",
+        "CostCenter": "Operations"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "[format('networkSecurity-{0}', parameters('environmentName'))]",
+      "resourceGroup": "[format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environmentName": {
+            "value": "[parameters('environmentName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.37.4.10188",
+              "templateHash": "14518244156202866700"
+            }
+          },
+          "parameters": {
+            "environmentName": {
+              "type": "string",
+              "metadata": {
+                "description": "Environment name"
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Location for resources"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/virtualNetworks",
+              "apiVersion": "2023-09-01",
+              "name": "[format('vnet-rbc-{0}', parameters('environmentName'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "addressSpace": {
+                  "addressPrefixes": [
+                    "10.0.0.0/16"
+                  ]
+                },
+                "subnets": [
+                  {
+                    "name": "snet-app-services",
+                    "properties": {
+                      "addressPrefix": "10.0.1.0/24",
+                      "serviceEndpoints": [
+                        {
+                          "service": "Microsoft.KeyVault"
+                        },
+                        {
+                          "service": "Microsoft.Storage"
+                        },
+                        {
+                          "service": "Microsoft.Sql"
+                        }
+                      ],
+                      "delegations": [
+                        {
+                          "name": "delegation-app-services",
+                          "properties": {
+                            "serviceName": "Microsoft.Web/serverFarms"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "name": "snet-database",
+                    "properties": {
+                      "addressPrefix": "10.0.2.0/24",
+                      "serviceEndpoints": [
+                        {
+                          "service": "Microsoft.Storage"
+                        }
+                      ],
+                      "delegations": [
+                        {
+                          "name": "delegation-postgresql",
+                          "properties": {
+                            "serviceName": "Microsoft.DBforPostgreSQL/flexibleServers"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "name": "snet-redis",
+                    "properties": {
+                      "addressPrefix": "10.0.3.0/24",
+                      "privateEndpointNetworkPolicies": "Disabled"
+                    }
+                  },
+                  {
+                    "name": "snet-private-endpoints",
+                    "properties": {
+                      "addressPrefix": "10.0.4.0/24",
+                      "privateEndpointNetworkPolicies": "Disabled"
+                    }
+                  },
+                  {
+                    "name": "snet-container-apps",
+                    "properties": {
+                      "addressPrefix": "10.0.5.0/24",
+                      "delegations": [
+                        {
+                          "name": "delegation-container-apps",
+                          "properties": {
+                            "serviceName": "Microsoft.App/environments"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.Network/networkSecurityGroups",
+              "apiVersion": "2023-09-01",
+              "name": "[format('nsg-app-services-{0}', parameters('environmentName'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "securityRules": [
+                  {
+                    "name": "AllowHTTPS",
+                    "properties": {
+                      "priority": 100,
+                      "direction": "Inbound",
+                      "access": "Allow",
+                      "protocol": "Tcp",
+                      "sourcePortRange": "*",
+                      "destinationPortRange": "443",
+                      "sourceAddressPrefix": "Internet",
+                      "destinationAddressPrefix": "*"
+                    }
+                  },
+                  {
+                    "name": "AllowHTTP",
+                    "properties": {
+                      "priority": 110,
+                      "direction": "Inbound",
+                      "access": "[if(equals(parameters('environmentName'), 'prod'), 'Deny', 'Allow')]",
+                      "protocol": "Tcp",
+                      "sourcePortRange": "*",
+                      "destinationPortRange": "80",
+                      "sourceAddressPrefix": "Internet",
+                      "destinationAddressPrefix": "*"
+                    }
+                  },
+                  {
+                    "name": "DenyAllInbound",
+                    "properties": {
+                      "priority": 1000,
+                      "direction": "Inbound",
+                      "access": "Deny",
+                      "protocol": "*",
+                      "sourcePortRange": "*",
+                      "destinationPortRange": "*",
+                      "sourceAddressPrefix": "*",
+                      "destinationAddressPrefix": "*"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.Network/networkSecurityGroups",
+              "apiVersion": "2023-09-01",
+              "name": "[format('nsg-database-{0}', parameters('environmentName'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "securityRules": [
+                  {
+                    "name": "AllowPostgreSQLFromAppServices",
+                    "properties": {
+                      "priority": 100,
+                      "direction": "Inbound",
+                      "access": "Allow",
+                      "protocol": "Tcp",
+                      "sourcePortRange": "*",
+                      "destinationPortRange": "5432",
+                      "sourceAddressPrefix": "10.0.1.0/24",
+                      "destinationAddressPrefix": "*"
+                    }
+                  },
+                  {
+                    "name": "AllowPostgreSQLFromContainerApps",
+                    "properties": {
+                      "priority": 110,
+                      "direction": "Inbound",
+                      "access": "Allow",
+                      "protocol": "Tcp",
+                      "sourcePortRange": "*",
+                      "destinationPortRange": "5432",
+                      "sourceAddressPrefix": "10.0.5.0/24",
+                      "destinationAddressPrefix": "*"
+                    }
+                  },
+                  {
+                    "name": "DenyAllInbound",
+                    "properties": {
+                      "priority": 1000,
+                      "direction": "Inbound",
+                      "access": "Deny",
+                      "protocol": "*",
+                      "sourcePortRange": "*",
+                      "destinationPortRange": "*",
+                      "sourceAddressPrefix": "*",
+                      "destinationAddressPrefix": "*"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "condition": "[equals(parameters('environmentName'), 'prod')]",
+              "type": "Microsoft.Network/privateDnsZones",
+              "apiVersion": "2020-06-01",
+              "name": "privatelink.vaultcore.azure.net",
+              "location": "global",
+              "properties": {}
+            },
+            {
+              "condition": "[equals(parameters('environmentName'), 'prod')]",
+              "type": "Microsoft.Network/privateDnsZones",
+              "apiVersion": "2020-06-01",
+              "name": "privatelink.postgres.database.azure.com",
+              "location": "global",
+              "properties": {}
+            },
+            {
+              "condition": "[equals(parameters('environmentName'), 'prod')]",
+              "type": "Microsoft.Network/privateDnsZones",
+              "apiVersion": "2020-06-01",
+              "name": "privatelink.redis.cache.windows.net",
+              "location": "global",
+              "properties": {}
+            },
+            {
+              "condition": "[equals(parameters('environmentName'), 'prod')]",
+              "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+              "apiVersion": "2020-06-01",
+              "name": "[format('{0}/{1}', 'privatelink.vaultcore.azure.net', format('{0}-link', format('vnet-rbc-{0}', parameters('environmentName'))))]",
+              "location": "global",
+              "properties": {
+                "registrationEnabled": false,
+                "virtualNetwork": {
+                  "id": "[resourceId('Microsoft.Network/virtualNetworks', format('vnet-rbc-{0}', parameters('environmentName')))]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.vaultcore.azure.net')]",
+                "[resourceId('Microsoft.Network/virtualNetworks', format('vnet-rbc-{0}', parameters('environmentName')))]"
+              ]
+            },
+            {
+              "condition": "[equals(parameters('environmentName'), 'prod')]",
+              "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+              "apiVersion": "2020-06-01",
+              "name": "[format('{0}/{1}', 'privatelink.postgres.database.azure.com', format('{0}-link', format('vnet-rbc-{0}', parameters('environmentName'))))]",
+              "location": "global",
+              "properties": {
+                "registrationEnabled": false,
+                "virtualNetwork": {
+                  "id": "[resourceId('Microsoft.Network/virtualNetworks', format('vnet-rbc-{0}', parameters('environmentName')))]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.postgres.database.azure.com')]",
+                "[resourceId('Microsoft.Network/virtualNetworks', format('vnet-rbc-{0}', parameters('environmentName')))]"
+              ]
+            },
+            {
+              "condition": "[equals(parameters('environmentName'), 'prod')]",
+              "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+              "apiVersion": "2020-06-01",
+              "name": "[format('{0}/{1}', 'privatelink.redis.cache.windows.net', format('{0}-link', format('vnet-rbc-{0}', parameters('environmentName'))))]",
+              "location": "global",
+              "properties": {
+                "registrationEnabled": false,
+                "virtualNetwork": {
+                  "id": "[resourceId('Microsoft.Network/virtualNetworks', format('vnet-rbc-{0}', parameters('environmentName')))]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.redis.cache.windows.net')]",
+                "[resourceId('Microsoft.Network/virtualNetworks', format('vnet-rbc-{0}', parameters('environmentName')))]"
+              ]
+            },
+            {
+              "condition": "[equals(parameters('environmentName'), 'prod')]",
+              "type": "Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies",
+              "apiVersion": "2023-09-01",
+              "name": "[format('waf-rbc-{0}', parameters('environmentName'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "customRules": [],
+                "policySettings": {
+                  "requestBodyCheck": true,
+                  "maxRequestBodySizeInKb": 128,
+                  "fileUploadLimitInMb": 10,
+                  "state": "Enabled",
+                  "mode": "Prevention"
+                },
+                "managedRules": {
+                  "managedRuleSets": [
+                    {
+                      "ruleSetType": "OWASP",
+                      "ruleSetVersion": "3.2"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "condition": "[equals(parameters('environmentName'), 'prod')]",
+              "type": "Microsoft.Network/ddosProtectionPlans",
+              "apiVersion": "2023-09-01",
+              "name": "[format('ddos-rbc-{0}', parameters('environmentName'))]",
+              "location": "[parameters('location')]",
+              "properties": {}
+            }
+          ],
+          "outputs": {
+            "vnetId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Network/virtualNetworks', format('vnet-rbc-{0}', parameters('environmentName')))]"
+            },
+            "appServicesSubnetId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Network/virtualNetworks', format('vnet-rbc-{0}', parameters('environmentName'))), '2023-09-01').subnets[0].id]"
+            },
+            "databaseSubnetId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Network/virtualNetworks', format('vnet-rbc-{0}', parameters('environmentName'))), '2023-09-01').subnets[1].id]"
+            },
+            "redisSubnetId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Network/virtualNetworks', format('vnet-rbc-{0}', parameters('environmentName'))), '2023-09-01').subnets[2].id]"
+            },
+            "privateEndpointsSubnetId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Network/virtualNetworks', format('vnet-rbc-{0}', parameters('environmentName'))), '2023-09-01').subnets[3].id]"
+            },
+            "containerAppsSubnetId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Network/virtualNetworks', format('vnet-rbc-{0}', parameters('environmentName'))), '2023-09-01').subnets[4].id]"
+            },
+            "privateDnsZoneKeyVaultId": {
+              "type": "string",
+              "value": "[if(equals(parameters('environmentName'), 'prod'), resourceId('Microsoft.Network/privateDnsZones', 'privatelink.vaultcore.azure.net'), '')]"
+            },
+            "privateDnsZonePostgreSQLId": {
+              "type": "string",
+              "value": "[if(equals(parameters('environmentName'), 'prod'), resourceId('Microsoft.Network/privateDnsZones', 'privatelink.postgres.database.azure.com'), '')]"
+            },
+            "privateDnsZoneRedisId": {
+              "type": "string",
+              "value": "[if(equals(parameters('environmentName'), 'prod'), resourceId('Microsoft.Network/privateDnsZones', 'privatelink.redis.cache.windows.net'), '')]"
+            },
+            "wafPolicyId": {
+              "type": "string",
+              "value": "[if(equals(parameters('environmentName'), 'prod'), resourceId('Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies', format('waf-rbc-{0}', parameters('environmentName'))), '')]"
+            },
+            "ddosProtectionPlanId": {
+              "type": "string",
+              "value": "[if(equals(parameters('environmentName'), 'prod'), resourceId('Microsoft.Network/ddosProtectionPlans', format('ddos-rbc-{0}', parameters('environmentName'))), '')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1))))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "[format('monitoring-{0}', parameters('environmentName'))]",
+      "resourceGroup": "[format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environmentName": {
+            "value": "[parameters('environmentName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "retentionInDays": "[if(equals(parameters('environmentName'), 'prod'), createObject('value', 2555), createObject('value', 30))]",
+          "enablePiiAuditLogging": {
+            "value": true
+          },
+          "dailyQuotaGb": "[if(equals(parameters('environmentName'), 'prod'), createObject('value', 100), createObject('value', 10))]",
+          "alertEmailAddress": {
+            "value": "devops@tourbus-leasing.com"
+          },
+          "enableSmsAlerts": {
+            "value": "[equals(parameters('environmentName'), 'prod')]"
+          },
+          "smsPhoneNumber": {
+            "value": ""
+          },
+          "tags": {
+            "value": {
+              "Environment": "[parameters('environmentName')]",
+              "Application": "RBCLeasingApp",
+              "ManagedBy": "Bicep"
+            }
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.37.4.10188",
+              "templateHash": "2172776166206518708"
+            }
+          },
+          "parameters": {
+            "environmentName": {
+              "type": "string",
+              "allowedValues": [
+                "dev",
+                "qa",
+                "prod"
+              ],
+              "metadata": {
+                "description": "Environment name"
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Location for resources"
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Tags for resources"
+              }
+            },
+            "retentionInDays": {
+              "type": "int",
+              "defaultValue": "[if(equals(parameters('environmentName'), 'prod'), 2555, 30)]",
+              "metadata": {
+                "description": "Log retention in days (2555 for 7 years PII compliance)"
+              }
+            },
+            "enablePiiAuditLogging": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Enable PII audit logging"
+              }
+            },
+            "dailyQuotaGb": {
+              "type": "int",
+              "defaultValue": "[if(equals(parameters('environmentName'), 'prod'), 100, 10)]",
+              "metadata": {
+                "description": "Daily quota in GB for Application Insights"
+              }
+            },
+            "alertEmailAddress": {
+              "type": "string",
+              "defaultValue": "devops@tourbus-leasing.com",
+              "metadata": {
+                "description": "Alert email address"
+              }
+            },
+            "enableSmsAlerts": {
+              "type": "bool",
+              "defaultValue": "[equals(parameters('environmentName'), 'prod')]",
+              "metadata": {
+                "description": "Enable SMS alerts for production"
+              }
+            },
+            "smsPhoneNumber": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "SMS phone number for alerts"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/workspaces",
+              "apiVersion": "2022-10-01",
+              "name": "[format('log-rbcleasing-{0}', parameters('environmentName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "sku": {
+                  "name": "PerGB2018"
+                },
+                "retentionInDays": "[parameters('retentionInDays')]",
+                "features": {
+                  "enableDataExport": true,
+                  "immediatePurgeDataOn30Days": "[not(equals(parameters('environmentName'), 'prod'))]",
+                  "disableLocalAuth": false,
+                  "enableLogAccessUsingOnlyResourcePermissions": true
+                },
+                "workspaceCapping": {
+                  "dailyQuotaGb": "[if(equals(parameters('environmentName'), 'prod'), -1, 5)]"
+                },
+                "publicNetworkAccessForIngestion": "Enabled",
+                "publicNetworkAccessForQuery": "Enabled"
+              }
+            },
+            {
+              "type": "Microsoft.Insights/components",
+              "apiVersion": "2020-02-02",
+              "name": "[format('appi-rbcleasing-{0}', parameters('environmentName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "kind": "web",
+              "properties": {
+                "Application_Type": "web",
+                "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', format('log-rbcleasing-{0}', parameters('environmentName')))]",
+                "IngestionMode": "LogAnalytics",
+                "publicNetworkAccessForIngestion": "Enabled",
+                "publicNetworkAccessForQuery": "Enabled",
+                "RetentionInDays": "[if(equals(parameters('environmentName'), 'prod'), 90, 30)]",
+                "ImmediatePurgeDataOn30Days": "[not(equals(parameters('environmentName'), 'prod'))]",
+                "DisableLocalAuth": false
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', format('log-rbcleasing-{0}', parameters('environmentName')))]"
+              ]
+            },
+            {
+              "condition": "[parameters('enablePiiAuditLogging')]",
+              "type": "Microsoft.Storage/storageAccounts",
+              "apiVersion": "2023-01-01",
+              "name": "[format('staudit{0}{1}', uniqueString(resourceGroup().id), parameters('environmentName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "[if(equals(parameters('environmentName'), 'prod'), 'Standard_GRS', 'Standard_LRS')]"
+              },
+              "kind": "StorageV2",
+              "properties": {
+                "accessTier": "Cool",
+                "supportsHttpsTrafficOnly": true,
+                "minimumTlsVersion": "TLS1_2",
+                "allowBlobPublicAccess": false,
+                "networkAcls": {
+                  "defaultAction": "Deny",
+                  "bypass": "AzureServices"
+                },
+                "encryption": {
+                  "services": {
+                    "blob": {
+                      "enabled": true
+                    }
+                  },
+                  "keySource": "Microsoft.Storage"
+                }
+              }
+            },
+            {
+              "condition": "[parameters('enablePiiAuditLogging')]",
+              "type": "Microsoft.Storage/storageAccounts/blobServices",
+              "apiVersion": "2023-01-01",
+              "name": "[format('{0}/{1}', format('staudit{0}{1}', uniqueString(resourceGroup().id), parameters('environmentName')), 'default')]",
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', format('staudit{0}{1}', uniqueString(resourceGroup().id), parameters('environmentName')))]"
+              ]
+            },
+            {
+              "condition": "[parameters('enablePiiAuditLogging')]",
+              "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+              "apiVersion": "2023-01-01",
+              "name": "[format('{0}/{1}/{2}', format('staudit{0}{1}', uniqueString(resourceGroup().id), parameters('environmentName')), 'default', 'pii-audit-logs')]",
+              "properties": {
+                "publicAccess": "None",
+                "metadata": {
+                  "purpose": "PII Access Audit Logs",
+                  "retention": "7 years"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', format('staudit{0}{1}', uniqueString(resourceGroup().id), parameters('environmentName')), 'default')]"
+              ]
+            },
+            {
+              "condition": "[parameters('enablePiiAuditLogging')]",
+              "type": "Microsoft.Storage/storageAccounts/managementPolicies",
+              "apiVersion": "2023-01-01",
+              "name": "[format('{0}/{1}', format('staudit{0}{1}', uniqueString(resourceGroup().id), parameters('environmentName')), 'default')]",
+              "properties": {
+                "policy": {
+                  "rules": [
+                    {
+                      "name": "DeleteAfter7Years",
+                      "enabled": true,
+                      "type": "Lifecycle",
+                      "definition": {
+                        "filters": {
+                          "blobTypes": [
+                            "blockBlob"
+                          ],
+                          "prefixMatch": [
+                            "pii-audit-logs/"
+                          ]
+                        },
+                        "actions": {
+                          "baseBlob": {
+                            "delete": {
+                              "daysAfterModificationGreaterThan": 2555
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "name": "MoveToArchiveAfter90Days",
+                      "enabled": true,
+                      "type": "Lifecycle",
+                      "definition": {
+                        "filters": {
+                          "blobTypes": [
+                            "blockBlob"
+                          ],
+                          "prefixMatch": [
+                            "pii-audit-logs/"
+                          ]
+                        },
+                        "actions": {
+                          "baseBlob": {
+                            "tierToArchive": {
+                              "daysAfterModificationGreaterThan": 90
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', format('staudit{0}{1}', uniqueString(resourceGroup().id), parameters('environmentName')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Insights/actionGroups",
+              "apiVersion": "2023-01-01",
+              "name": "[format('ag-rbcleasing-{0}', parameters('environmentName'))]",
+              "location": "global",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "groupShortName": "[format('TB{0}', toUpper(parameters('environmentName')))]",
+                "enabled": true,
+                "emailReceivers": [
+                  {
+                    "name": "DevOpsTeam",
+                    "emailAddress": "[parameters('alertEmailAddress')]",
+                    "useCommonAlertSchema": true
+                  }
+                ],
+                "smsReceivers": "[if(and(parameters('enableSmsAlerts'), not(empty(parameters('smsPhoneNumber')))), createArray(createObject('name', 'OnCallEngineer', 'countryCode', '1', 'phoneNumber', parameters('smsPhoneNumber'))), createArray())]",
+                "azureAppPushReceivers": "[if(equals(parameters('environmentName'), 'prod'), createArray(createObject('name', 'MobileApp', 'emailAddress', parameters('alertEmailAddress'))), createArray())]"
+              }
+            },
+            {
+              "type": "Microsoft.Insights/metricAlerts",
+              "apiVersion": "2018-03-01",
+              "name": "[format('alert-high-error-rate-{0}', parameters('environmentName'))]",
+              "location": "global",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "severity": "[if(equals(parameters('environmentName'), 'prod'), 1, 2)]",
+                "enabled": true,
+                "scopes": [
+                  "[resourceId('Microsoft.Insights/components', format('appi-rbcleasing-{0}', parameters('environmentName')))]"
+                ],
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "criteria": {
+                  "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+                  "allOf": [
+                    {
+                      "name": "HighErrorRate",
+                      "metricName": "exceptions/count",
+                      "metricNamespace": "microsoft.insights/components",
+                      "operator": "GreaterThan",
+                      "threshold": "[if(equals(parameters('environmentName'), 'prod'), 10, 50)]",
+                      "timeAggregation": "Count",
+                      "criterionType": "StaticThresholdCriterion"
+                    }
+                  ]
+                },
+                "autoMitigate": true,
+                "actions": [
+                  {
+                    "actionGroupId": "[resourceId('Microsoft.Insights/actionGroups', format('ag-rbcleasing-{0}', parameters('environmentName')))]"
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Insights/actionGroups', format('ag-rbcleasing-{0}', parameters('environmentName')))]",
+                "[resourceId('Microsoft.Insights/components', format('appi-rbcleasing-{0}', parameters('environmentName')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Insights/metricAlerts",
+              "apiVersion": "2018-03-01",
+              "name": "[format('alert-high-response-time-{0}', parameters('environmentName'))]",
+              "location": "global",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "severity": 2,
+                "enabled": true,
+                "scopes": [
+                  "[resourceId('Microsoft.Insights/components', format('appi-rbcleasing-{0}', parameters('environmentName')))]"
+                ],
+                "evaluationFrequency": "PT5M",
+                "windowSize": "PT15M",
+                "criteria": {
+                  "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+                  "allOf": [
+                    {
+                      "name": "HighResponseTime",
+                      "metricName": "requests/duration",
+                      "metricNamespace": "microsoft.insights/components",
+                      "operator": "GreaterThan",
+                      "threshold": "[if(equals(parameters('environmentName'), 'prod'), 2000, 5000)]",
+                      "timeAggregation": "Average",
+                      "criterionType": "StaticThresholdCriterion"
+                    }
+                  ]
+                },
+                "autoMitigate": true,
+                "actions": [
+                  {
+                    "actionGroupId": "[resourceId('Microsoft.Insights/actionGroups', format('ag-rbcleasing-{0}', parameters('environmentName')))]"
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Insights/actionGroups', format('ag-rbcleasing-{0}', parameters('environmentName')))]",
+                "[resourceId('Microsoft.Insights/components', format('appi-rbcleasing-{0}', parameters('environmentName')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Insights/metricAlerts",
+              "apiVersion": "2018-03-01",
+              "name": "[format('alert-low-availability-{0}', parameters('environmentName'))]",
+              "location": "global",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "severity": 1,
+                "enabled": true,
+                "scopes": [
+                  "[resourceId('Microsoft.Insights/components', format('appi-rbcleasing-{0}', parameters('environmentName')))]"
+                ],
+                "evaluationFrequency": "PT1M",
+                "windowSize": "PT5M",
+                "criteria": {
+                  "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+                  "allOf": [
+                    {
+                      "name": "LowAvailability",
+                      "metricName": "availabilityResults/availabilityPercentage",
+                      "metricNamespace": "microsoft.insights/components",
+                      "operator": "LessThan",
+                      "threshold": "[if(equals(parameters('environmentName'), 'prod'), 99, 95)]",
+                      "timeAggregation": "Average",
+                      "criterionType": "StaticThresholdCriterion"
+                    }
+                  ]
+                },
+                "autoMitigate": false,
+                "actions": [
+                  {
+                    "actionGroupId": "[resourceId('Microsoft.Insights/actionGroups', format('ag-rbcleasing-{0}', parameters('environmentName')))]"
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Insights/actionGroups', format('ag-rbcleasing-{0}', parameters('environmentName')))]",
+                "[resourceId('Microsoft.Insights/components', format('appi-rbcleasing-{0}', parameters('environmentName')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "workspaceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.OperationalInsights/workspaces', format('log-rbcleasing-{0}', parameters('environmentName')))]"
+            },
+            "workspaceName": {
+              "type": "string",
+              "value": "[format('log-rbcleasing-{0}', parameters('environmentName'))]"
+            },
+            "applicationInsightsId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Insights/components', format('appi-rbcleasing-{0}', parameters('environmentName')))]"
+            },
+            "applicationInsightsName": {
+              "type": "string",
+              "value": "[format('appi-rbcleasing-{0}', parameters('environmentName'))]"
+            },
+            "applicationInsightsConnectionString": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Insights/components', format('appi-rbcleasing-{0}', parameters('environmentName'))), '2020-02-02').ConnectionString]"
+            },
+            "applicationInsightsInstrumentationKey": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Insights/components', format('appi-rbcleasing-{0}', parameters('environmentName'))), '2020-02-02').InstrumentationKey]"
+            },
+            "actionGroupId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Insights/actionGroups', format('ag-rbcleasing-{0}', parameters('environmentName')))]"
+            },
+            "auditStorageAccountName": {
+              "type": "string",
+              "value": "[if(parameters('enablePiiAuditLogging'), format('staudit{0}{1}', uniqueString(resourceGroup().id), parameters('environmentName')), '')]"
+            },
+            "auditStorageAccountId": {
+              "type": "string",
+              "value": "[if(parameters('enablePiiAuditLogging'), resourceId('Microsoft.Storage/storageAccounts', format('staudit{0}{1}', uniqueString(resourceGroup().id), parameters('environmentName'))), '')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('networkSecurity-{0}', parameters('environmentName')))]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1))))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "[format('keyVault-{0}', parameters('environmentName'))]",
+      "resourceGroup": "[format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environmentName": {
+            "value": "[parameters('environmentName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "principalIds": {
+            "value": []
+          },
+          "logAnalyticsWorkspaceId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('monitoring-{0}', parameters('environmentName'))), '2022-09-01').outputs.workspaceId.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.37.4.10188",
+              "templateHash": "16182908499472687489"
+            }
+          },
+          "parameters": {
+            "environmentName": {
+              "type": "string",
+              "metadata": {
+                "description": "Environment name"
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Location for resources"
+              }
+            },
+            "principalIds": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "Principal IDs that need access to Key Vault"
+              }
+            },
+            "logAnalyticsWorkspaceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Log Analytics Workspace ID for diagnostic settings"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.KeyVault/vaults",
+              "apiVersion": "2023-07-01",
+              "name": "[format('kv-rbc-{0}', parameters('environmentName'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "sku": {
+                  "family": "A",
+                  "name": "standard"
+                },
+                "tenantId": "[subscription().tenantId]",
+                "enabledForDeployment": true,
+                "enabledForDiskEncryption": false,
+                "enabledForTemplateDeployment": true,
+                "enableSoftDelete": true,
+                "softDeleteRetentionInDays": "[if(equals(parameters('environmentName'), 'prod'), 90, 7)]",
+                "enableRbacAuthorization": true,
+                "enablePurgeProtection": true,
+                "publicNetworkAccess": "[if(equals(parameters('environmentName'), 'prod'), 'Disabled', 'Enabled')]",
+                "networkAcls": {
+                  "defaultAction": "[if(equals(parameters('environmentName'), 'prod'), 'Deny', 'Allow')]",
+                  "bypass": "AzureServices",
+                  "ipRules": "[if(equals(parameters('environmentName'), 'prod'), createArray(), createArray(createObject('value', '0.0.0.0/0')))]",
+                  "virtualNetworkRules": []
+                }
+              }
+            },
+            {
+              "copy": {
+                "name": "keyVaultSecretsOfficerRole",
+                "count": "[length(parameters('principalIds'))]"
+              },
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.KeyVault/vaults/{0}', format('kv-rbc-{0}', parameters('environmentName')))]",
+              "name": "[guid(resourceId('Microsoft.KeyVault/vaults', format('kv-rbc-{0}', parameters('environmentName'))), parameters('principalIds')[copyIndex()], 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7')]",
+              "properties": {
+                "principalId": "[parameters('principalIds')[copyIndex()]]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7')]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', format('kv-rbc-{0}', parameters('environmentName')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.EventGrid/systemTopics",
+              "apiVersion": "2023-12-15-preview",
+              "name": "[format('eg-keyvault-{0}', parameters('environmentName'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "source": "[resourceId('Microsoft.KeyVault/vaults', format('kv-rbc-{0}', parameters('environmentName')))]",
+                "topicType": "Microsoft.KeyVault.vaults"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', format('kv-rbc-{0}', parameters('environmentName')))]"
+              ]
+            },
+            {
+              "condition": "[not(empty(parameters('logAnalyticsWorkspaceId')))]",
+              "type": "Microsoft.Insights/diagnosticSettings",
+              "apiVersion": "2021-05-01-preview",
+              "scope": "[format('Microsoft.KeyVault/vaults/{0}', format('kv-rbc-{0}', parameters('environmentName')))]",
+              "name": "keyvault-audit-logs",
+              "properties": {
+                "logs": [
+                  {
+                    "category": "AuditEvent",
+                    "enabled": true
+                  }
+                ],
+                "metrics": [
+                  {
+                    "category": "AllMetrics",
+                    "enabled": true
+                  }
+                ],
+                "workspaceId": "[parameters('logAnalyticsWorkspaceId')]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', format('kv-rbc-{0}', parameters('environmentName')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "name": {
+              "type": "string",
+              "value": "[format('kv-rbc-{0}', parameters('environmentName'))]"
+            },
+            "uri": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.KeyVault/vaults', format('kv-rbc-{0}', parameters('environmentName'))), '2023-07-01').vaultUri]"
+            },
+            "id": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.KeyVault/vaults', format('kv-rbc-{0}', parameters('environmentName')))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('monitoring-{0}', parameters('environmentName')))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('networkSecurity-{0}', parameters('environmentName')))]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1))))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "[format('aksCluster-{0}', parameters('environmentName'))]",
+      "resourceGroup": "[format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environmentName": {
+            "value": "[parameters('environmentName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "keyVaultName": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('keyVault-{0}', parameters('environmentName'))), '2022-09-01').outputs.name.value]"
+          },
+          "logAnalyticsWorkspaceId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('monitoring-{0}', parameters('environmentName'))), '2022-09-01').outputs.workspaceId.value]"
+          },
+          "enableAutoShutdown": {
+            "value": "[parameters('enableAutoShutdown')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.37.4.10188",
+              "templateHash": "7235478921645212576"
+            }
+          },
+          "parameters": {
+            "environmentName": {
+              "type": "string",
+              "metadata": {
+                "description": "Environment name"
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Azure region for resources"
+              }
+            },
+            "keyVaultName": {
+              "type": "string",
+              "metadata": {
+                "description": "Key Vault name for storing cluster credentials"
+              }
+            },
+            "logAnalyticsWorkspaceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Log Analytics workspace ID for monitoring"
+              }
+            },
+            "enableAutoShutdown": {
+              "type": "bool",
+              "defaultValue": "[not(equals(parameters('environmentName'), 'prod'))]",
+              "metadata": {
+                "description": "Enable auto-shutdown for cost savings"
+              }
+            },
+            "minNodeCount": {
+              "type": "int",
+              "defaultValue": "[if(equals(parameters('environmentName'), 'prod'), 1, 0)]",
+              "metadata": {
+                "description": "Minimum node count (0 for cost savings in dev)"
+              }
+            },
+            "maxNodeCount": {
+              "type": "int",
+              "defaultValue": "[if(equals(parameters('environmentName'), 'prod'), 5, 3)]",
+              "metadata": {
+                "description": "Maximum node count"
+              }
+            },
+            "nodeVmSize": {
+              "type": "string",
+              "defaultValue": "[if(equals(parameters('environmentName'), 'prod'), 'Standard_D2s_v3', 'Standard_B2s')]",
+              "metadata": {
+                "description": "Node VM size - cost-effective options"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ContainerService/managedClusters",
+              "apiVersion": "2024-02-01",
+              "name": "[format('aks-rbcleasing-{0}', parameters('environmentName'))]",
+              "location": "[parameters('location')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "kubernetesVersion": "1.29.4",
+                "dnsPrefix": "[format('rbc-{0}', parameters('environmentName'))]",
+                "agentPoolProfiles": [
+                  {
+                    "name": "system",
+                    "count": "[if(equals(parameters('environmentName'), 'prod'), 2, 1)]",
+                    "vmSize": "[parameters('nodeVmSize')]",
+                    "type": "VirtualMachineScaleSets",
+                    "mode": "System",
+                    "osType": "Linux",
+                    "osDiskSizeGB": 30,
+                    "osDiskType": "Managed",
+                    "vnetSubnetID": null,
+                    "enableAutoScaling": true,
+                    "minCount": "[parameters('minNodeCount')]",
+                    "maxCount": "[parameters('maxNodeCount')]",
+                    "maxPods": 30,
+                    "tags": {
+                      "Environment": "[parameters('environmentName')]",
+                      "Cost-Center": "Development",
+                      "Auto-Shutdown": "[if(parameters('enableAutoShutdown'), 'true', 'false')]"
+                    }
+                  }
+                ],
+                "networkProfile": {
+                  "networkPlugin": "kubenet",
+                  "networkPolicy": "calico",
+                  "loadBalancerSku": "Basic",
+                  "serviceCidr": "10.100.0.0/16",
+                  "dnsServiceIP": "10.100.0.10",
+                  "podCidr": "10.101.0.0/16"
+                },
+                "addonProfiles": {
+                  "omsAgent": {
+                    "enabled": true,
+                    "config": {
+                      "logAnalyticsWorkspaceResourceID": "[parameters('logAnalyticsWorkspaceId')]"
+                    }
+                  },
+                  "azurePolicy": {
+                    "enabled": false
+                  },
+                  "httpApplicationRouting": {
+                    "enabled": false
+                  }
+                },
+                "enableRBAC": true,
+                "aadProfile": {
+                  "managed": true,
+                  "enableAzureRBAC": true
+                },
+                "autoUpgradeProfile": {
+                  "upgradeChannel": "[if(equals(parameters('environmentName'), 'prod'), 'stable', 'patch')]"
+                },
+                "autoScalerProfile": {
+                  "scale-down-delay-after-add": "10m",
+                  "scale-down-unneeded-time": "10m",
+                  "scale-down-utilization-threshold": "0.5"
+                }
+              },
+              "tags": {
+                "Environment": "[parameters('environmentName')]",
+                "Application": "RBCLeasingApp",
+                "ManagedBy": "Bicep",
+                "CostOptimized": "true"
+              }
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('keyVaultName'), format('aks-admin-credentials-{0}', parameters('environmentName')))]",
+              "properties": {
+                "value": "[base64ToString(listClusterAdminCredential(resourceId('Microsoft.ContainerService/managedClusters', format('aks-rbcleasing-{0}', parameters('environmentName'))), '2024-02-01').kubeconfigs[0].value)]",
+                "attributes": {
+                  "enabled": true
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ContainerService/managedClusters', format('aks-rbcleasing-{0}', parameters('environmentName')))]"
+              ]
+            },
+            {
+              "condition": "[and(parameters('enableAutoShutdown'), not(equals(parameters('environmentName'), 'prod')))]",
+              "type": "Microsoft.DevTestLab/schedules",
+              "apiVersion": "2018-09-15",
+              "name": "[format('shutdown-computevm-aks-rbcleasing-{0}', parameters('environmentName'))]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "status": "Enabled",
+                "taskType": "ComputeVmShutdownTask",
+                "dailyRecurrence": {
+                  "time": "1900"
+                },
+                "timeZoneId": "Eastern Standard Time",
+                "targetResourceId": "[resourceId('Microsoft.ContainerService/managedClusters', format('aks-rbcleasing-{0}', parameters('environmentName')))]",
+                "notificationSettings": {
+                  "status": "Disabled"
+                }
+              },
+              "tags": {
+                "Environment": "[parameters('environmentName')]",
+                "Purpose": "CostOptimization"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ContainerService/managedClusters', format('aks-rbcleasing-{0}', parameters('environmentName')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(resourceGroup().id, 'aks-acr-pull', parameters('environmentName'))]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')]",
+                "principalId": "[reference(resourceId('Microsoft.ContainerService/managedClusters', format('aks-rbcleasing-{0}', parameters('environmentName'))), '2024-02-01').identityProfile.kubeletidentity.objectId]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ContainerService/managedClusters', format('aks-rbcleasing-{0}', parameters('environmentName')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "clusterName": {
+              "type": "string",
+              "value": "[format('aks-rbcleasing-{0}', parameters('environmentName'))]"
+            },
+            "clusterFqdn": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ContainerService/managedClusters', format('aks-rbcleasing-{0}', parameters('environmentName'))), '2024-02-01').fqdn]"
+            },
+            "principalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ContainerService/managedClusters', format('aks-rbcleasing-{0}', parameters('environmentName'))), '2024-02-01', 'full').identity.principalId]"
+            },
+            "kubeletIdentityObjectId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ContainerService/managedClusters', format('aks-rbcleasing-{0}', parameters('environmentName'))), '2024-02-01').identityProfile.kubeletidentity.objectId]"
+            },
+            "kubernetesVersion": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ContainerService/managedClusters', format('aks-rbcleasing-{0}', parameters('environmentName'))), '2024-02-01').kubernetesVersion]"
+            },
+            "nodeResourceGroup": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ContainerService/managedClusters', format('aks-rbcleasing-{0}', parameters('environmentName'))), '2024-02-01').nodeResourceGroup]"
+            },
+            "estimatedMonthlyCost": {
+              "type": "string",
+              "value": "[if(equals(parameters('environmentName'), 'prod'), '$200-400', '$50-100')]"
+            },
+            "costOptimizationFeatures": {
+              "type": "array",
+              "value": [
+                "Auto-scaling with scale-to-zero (dev)",
+                "Kubenet networking (vs Azure CNI)",
+                "Basic load balancer (dev)",
+                "Minimal OS disk (30GB)",
+                "Cost-effective VM sizes (B2s for dev)",
+                "Auto-shutdown scheduling (dev)",
+                "Single node for system pool (dev)"
+              ]
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('keyVault-{0}', parameters('environmentName')))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('monitoring-{0}', parameters('environmentName')))]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1))))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "[format('postgresql-{0}', parameters('environmentName'))]",
+      "resourceGroup": "[format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environmentName": {
+            "value": "[parameters('environmentName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "enableHA": {
+            "value": "[equals(parameters('environmentName'), 'prod')]"
+          },
+          "backupRegion": {
+            "value": "[parameters('backupRegion')]"
+          },
+          "keyVaultName": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('keyVault-{0}', parameters('environmentName'))), '2022-09-01').outputs.name.value]"
+          },
+          "administratorPassword": {
+            "value": "[parameters('administratorPassword')]"
+          },
+          "logAnalyticsWorkspaceId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('monitoring-{0}', parameters('environmentName'))), '2022-09-01').outputs.workspaceId.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.37.4.10188",
+              "templateHash": "4779895742139456596"
+            }
+          },
+          "parameters": {
+            "environmentName": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "enableHA": {
+              "type": "bool"
+            },
+            "backupRegion": {
+              "type": "string"
+            },
+            "keyVaultName": {
+              "type": "string"
+            },
+            "administratorPassword": {
+              "type": "securestring"
+            },
+            "logAnalyticsWorkspaceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Log Analytics Workspace ID for diagnostic settings"
+              }
+            }
+          },
+          "variables": {
+            "skuName": "[if(equals(parameters('environmentName'), 'prod'), 'Standard_D4ds_v4', 'Standard_B2s')]",
+            "storageSizeGB": "[if(equals(parameters('environmentName'), 'prod'), 256, 32)]",
+            "adminUsername": "rbcadmin",
+            "regionHasZones": "[contains(createArray('eastus', 'eastus2', 'westus2'), parameters('location'))]",
+            "availabilityZone": "[if(and(equals(parameters('environmentName'), 'prod'), variables('regionHasZones')), '1', '')]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers",
+              "apiVersion": "2024-08-01",
+              "name": "[format('psql-rbcleasing-{0}', parameters('environmentName'))]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "[variables('skuName')]",
+                "tier": "[if(equals(parameters('environmentName'), 'prod'), 'GeneralPurpose', 'Burstable')]"
+              },
+              "properties": {
+                "administratorLogin": "[variables('adminUsername')]",
+                "administratorLoginPassword": "[parameters('administratorPassword')]",
+                "version": "15",
+                "availabilityZone": "[variables('availabilityZone')]",
+                "storage": {
+                  "storageSizeGB": "[variables('storageSizeGB')]",
+                  "autoGrow": "Enabled"
+                },
+                "backup": {
+                  "backupRetentionDays": "[if(equals(parameters('environmentName'), 'prod'), 35, 7)]",
+                  "geoRedundantBackup": "[if(equals(parameters('environmentName'), 'prod'), 'Enabled', 'Disabled')]"
+                },
+                "highAvailability": {
+                  "mode": "[if(parameters('enableHA'), if(variables('regionHasZones'), 'ZoneRedundant', 'SameZone'), 'Disabled')]",
+                  "standbyAvailabilityZone": "[if(and(parameters('enableHA'), variables('regionHasZones')), '2', '')]"
+                },
+                "dataEncryption": {
+                  "type": "SystemManaged"
+                }
+              },
+              "identity": {
+                "type": "SystemAssigned"
+              }
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('keyVaultName'), 'postgresql-admin-password')]",
+              "properties": {
+                "value": "[parameters('administratorPassword')]"
+              }
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('keyVaultName'), 'postgresql-connection-string')]",
+              "properties": {
+                "value": "[format('Server={0};Database=tourbus_leasing;User Id={1};Password={2};', reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('psql-rbcleasing-{0}', parameters('environmentName'))), '2024-08-01').fullyQualifiedDomainName, variables('adminUsername'), parameters('administratorPassword'))]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('psql-rbcleasing-{0}', parameters('environmentName')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('keyVaultName'), 'postgresql-server-name')]",
+              "properties": {
+                "value": "[reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('psql-rbcleasing-{0}', parameters('environmentName'))), '2024-08-01').fullyQualifiedDomainName]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('psql-rbcleasing-{0}', parameters('environmentName')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('keyVaultName'), 'postgresql-username')]",
+              "properties": {
+                "value": "[variables('adminUsername')]"
+              }
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('keyVaultName'), 'postgresql-database')]",
+              "properties": {
+                "value": "tourbus_leasing"
+              }
+            },
+            {
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers/databases",
+              "apiVersion": "2024-08-01",
+              "name": "[format('{0}/{1}', format('psql-rbcleasing-{0}', parameters('environmentName')), 'rbc_leasing')]",
+              "properties": {
+                "charset": "UTF8",
+                "collation": "en_US.utf8"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('psql-rbcleasing-{0}', parameters('environmentName')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers/configurations",
+              "apiVersion": "2024-08-01",
+              "name": "[format('{0}/{1}', format('psql-rbcleasing-{0}', parameters('environmentName')), 'log_statement')]",
+              "properties": {
+                "value": "[if(equals(parameters('environmentName'), 'prod'), 'all', 'ddl')]",
+                "source": "user-override"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers/databases', format('psql-rbcleasing-{0}', parameters('environmentName')), 'rbc_leasing')]",
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('psql-rbcleasing-{0}', parameters('environmentName')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers/configurations",
+              "apiVersion": "2024-08-01",
+              "name": "[format('{0}/{1}', format('psql-rbcleasing-{0}', parameters('environmentName')), 'pg_qs.query_capture_mode')]",
+              "properties": {
+                "value": "ALL",
+                "source": "user-override"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers/configurations', format('psql-rbcleasing-{0}', parameters('environmentName')), 'log_statement')]",
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('psql-rbcleasing-{0}', parameters('environmentName')))]"
+              ]
+            },
+            {
+              "condition": "[not(equals(parameters('environmentName'), 'prod'))]",
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules",
+              "apiVersion": "2024-08-01",
+              "name": "[format('{0}/{1}', format('psql-rbcleasing-{0}', parameters('environmentName')), 'AllowAzureServices')]",
+              "properties": {
+                "startIpAddress": "0.0.0.0",
+                "endIpAddress": "0.0.0.0"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('psql-rbcleasing-{0}', parameters('environmentName')))]"
+              ]
+            },
+            {
+              "condition": "[equals(parameters('environmentName'), 'prod')]",
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules",
+              "apiVersion": "2024-08-01",
+              "name": "[format('{0}/{1}', format('psql-rbcleasing-{0}', parameters('environmentName')), 'DenyPublicAccess')]",
+              "properties": {
+                "startIpAddress": "255.255.255.255",
+                "endIpAddress": "255.255.255.255"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('psql-rbcleasing-{0}', parameters('environmentName')))]"
+              ]
+            },
+            {
+              "condition": "[not(empty(parameters('logAnalyticsWorkspaceId')))]",
+              "type": "Microsoft.Insights/diagnosticSettings",
+              "apiVersion": "2021-05-01-preview",
+              "scope": "[format('Microsoft.DBforPostgreSQL/flexibleServers/{0}', format('psql-rbcleasing-{0}', parameters('environmentName')))]",
+              "name": "pii-audit-logs",
+              "properties": {
+                "logs": [
+                  {
+                    "category": "PostgreSQLLogs",
+                    "enabled": true
+                  }
+                ],
+                "metrics": [
+                  {
+                    "category": "AllMetrics",
+                    "enabled": true
+                  }
+                ],
+                "workspaceId": "[parameters('logAnalyticsWorkspaceId')]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('psql-rbcleasing-{0}', parameters('environmentName')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "serverName": {
+              "type": "string",
+              "value": "[format('psql-rbcleasing-{0}', parameters('environmentName'))]"
+            },
+            "databaseName": {
+              "type": "string",
+              "value": "rbc_leasing"
+            },
+            "keyVaultSecretUri": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.KeyVault/vaults/secrets', parameters('keyVaultName'), 'postgresql-connection-string'), '2023-07-01').secretUri]"
+            },
+            "principalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', format('psql-rbcleasing-{0}', parameters('environmentName'))), '2024-08-01', 'full').identity.principalId]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('keyVault-{0}', parameters('environmentName')))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('monitoring-{0}', parameters('environmentName')))]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1))))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "[format('redis-{0}', parameters('environmentName'))]",
+      "resourceGroup": "[format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environmentName": {
+            "value": "[parameters('environmentName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "sku": "[if(equals(parameters('environmentName'), 'prod'), createObject('value', 'Premium'), createObject('value', 'Basic'))]",
+          "keyVaultName": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('keyVault-{0}', parameters('environmentName'))), '2022-09-01').outputs.name.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.37.4.10188",
+              "templateHash": "875526119544703729"
+            }
+          },
+          "parameters": {
+            "environmentName": {
+              "type": "string",
+              "metadata": {
+                "description": "Environment name"
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Location for resources"
+              }
+            },
+            "sku": {
+              "type": "string",
+              "defaultValue": "Basic",
+              "allowedValues": [
+                "Basic",
+                "Standard",
+                "Premium"
+              ],
+              "metadata": {
+                "description": "Redis SKU"
+              }
+            },
+            "keyVaultName": {
+              "type": "string",
+              "metadata": {
+                "description": "Key Vault name for storing secrets"
+              }
+            }
+          },
+          "variables": {
+            "skuMap": {
+              "Basic": {
+                "name": "Basic",
+                "family": "C",
+                "capacity": 0
+              },
+              "Standard": {
+                "name": "Standard",
+                "family": "C",
+                "capacity": 1
+              },
+              "Premium": {
+                "name": "Premium",
+                "family": "P",
+                "capacity": 1
+              }
+            },
+            "regionHasZones": "[contains(createArray('eastus', 'eastus2', 'westus2'), parameters('location'))]",
+            "zones": "[if(and(equals(parameters('sku'), 'Premium'), variables('regionHasZones')), createArray('1', '2', '3'), createArray())]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Cache/redis",
+              "apiVersion": "2023-08-01",
+              "name": "[format('redis-rbcleasing-{0}', parameters('environmentName'))]",
+              "location": "[parameters('location')]",
+              "zones": "[variables('zones')]",
+              "properties": {
+                "sku": {
+                  "name": "[variables('skuMap')[parameters('sku')].name]",
+                  "family": "[variables('skuMap')[parameters('sku')].family]",
+                  "capacity": "[variables('skuMap')[parameters('sku')].capacity]"
+                },
+                "enableNonSslPort": false,
+                "minimumTlsVersion": "1.2",
+                "redisConfiguration": {
+                  "maxmemory-policy": "allkeys-lru"
+                }
+              },
+              "identity": {
+                "type": "SystemAssigned"
+              }
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('keyVaultName'), 'redis-primary-key')]",
+              "properties": {
+                "value": "[listKeys(resourceId('Microsoft.Cache/redis', format('redis-rbcleasing-{0}', parameters('environmentName'))), '2023-08-01').primaryKey]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Cache/redis', format('redis-rbcleasing-{0}', parameters('environmentName')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('keyVaultName'), 'redis-connection-string')]",
+              "properties": {
+                "value": "[format('{0}:{1},password={2},ssl=True,abortConnect=False', reference(resourceId('Microsoft.Cache/redis', format('redis-rbcleasing-{0}', parameters('environmentName'))), '2023-08-01').hostName, reference(resourceId('Microsoft.Cache/redis', format('redis-rbcleasing-{0}', parameters('environmentName'))), '2023-08-01').sslPort, listKeys(resourceId('Microsoft.Cache/redis', format('redis-rbcleasing-{0}', parameters('environmentName'))), '2023-08-01').primaryKey)]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Cache/redis', format('redis-rbcleasing-{0}', parameters('environmentName')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('keyVaultName'), 'redis-host')]",
+              "properties": {
+                "value": "[reference(resourceId('Microsoft.Cache/redis', format('redis-rbcleasing-{0}', parameters('environmentName'))), '2023-08-01').hostName]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Cache/redis', format('redis-rbcleasing-{0}', parameters('environmentName')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('keyVaultName'), 'redis-port')]",
+              "properties": {
+                "value": "[string(reference(resourceId('Microsoft.Cache/redis', format('redis-rbcleasing-{0}', parameters('environmentName'))), '2023-08-01').sslPort)]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Cache/redis', format('redis-rbcleasing-{0}', parameters('environmentName')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "hostName": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Cache/redis', format('redis-rbcleasing-{0}', parameters('environmentName'))), '2023-08-01').hostName]"
+            },
+            "port": {
+              "type": "int",
+              "value": "[reference(resourceId('Microsoft.Cache/redis', format('redis-rbcleasing-{0}', parameters('environmentName'))), '2023-08-01').sslPort]"
+            },
+            "keyVaultSecretUri": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.KeyVault/vaults/secrets', parameters('keyVaultName'), 'redis-connection-string'), '2023-07-01').secretUri]"
+            },
+            "principalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Cache/redis', format('redis-rbcleasing-{0}', parameters('environmentName'))), '2023-08-01', 'full').identity.principalId]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('keyVault-{0}', parameters('environmentName')))]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1))))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "[format('containerRegistry-{0}', parameters('environmentName'))]",
+      "resourceGroup": "[format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environmentName": {
+            "value": "[parameters('environmentName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "enableGeoReplication": {
+            "value": "[equals(parameters('environmentName'), 'prod')]"
+          },
+          "enableVulnerabilityScanning": {
+            "value": true
+          },
+          "enableContentTrust": {
+            "value": "[equals(parameters('environmentName'), 'prod')]"
+          },
+          "retentionDays": "[if(equals(parameters('environmentName'), 'prod'), createObject('value', 90), createObject('value', 30))]",
+          "pullPrincipalIds": {
+            "value": [
+              "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('aksCluster-{0}', parameters('environmentName'))), '2022-09-01').outputs.kubeletIdentityObjectId.value]"
+            ]
+          },
+          "pushPrincipalIds": {
+            "value": []
+          },
+          "tags": {
+            "value": {
+              "Environment": "[parameters('environmentName')]",
+              "Application": "RBCLeasingApp",
+              "ManagedBy": "Bicep"
+            }
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.37.4.10188",
+              "templateHash": "6268847261924519967"
+            }
+          },
+          "parameters": {
+            "environmentName": {
+              "type": "string",
+              "allowedValues": [
+                "dev",
+                "qa",
+                "prod"
+              ],
+              "metadata": {
+                "description": "Environment name"
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Location for resources"
+              }
+            },
+            "secondaryLocation": {
+              "type": "string",
+              "defaultValue": "westus2",
+              "metadata": {
+                "description": "Secondary location for geo-replication"
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Tags for resources"
+              }
+            },
+            "enableGeoReplication": {
+              "type": "bool",
+              "defaultValue": "[equals(parameters('environmentName'), 'prod')]",
+              "metadata": {
+                "description": "Enable geo-replication (Premium SKU required)"
+              }
+            },
+            "enableVulnerabilityScanning": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Enable vulnerability scanning"
+              }
+            },
+            "enableContentTrust": {
+              "type": "bool",
+              "defaultValue": "[equals(parameters('environmentName'), 'prod')]",
+              "metadata": {
+                "description": "Enable content trust"
+              }
+            },
+            "retentionDays": {
+              "type": "int",
+              "defaultValue": "[if(equals(parameters('environmentName'), 'prod'), 90, 30)]",
+              "metadata": {
+                "description": "Days to retain untagged manifests"
+              }
+            },
+            "pullPrincipalIds": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "Principal IDs that need pull access"
+              }
+            },
+            "pushPrincipalIds": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "Principal IDs that need push access"
+              }
+            }
+          },
+          "variables": {
+            "acrName": "acrtourbus",
+            "skuName": "[if(equals(parameters('environmentName'), 'prod'), 'Premium', 'Standard')]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ContainerRegistry/registries",
+              "apiVersion": "2023-07-01",
+              "name": "[variables('acrName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "[variables('skuName')]"
+              },
+              "properties": {
+                "adminUserEnabled": false,
+                "publicNetworkAccess": "[if(equals(parameters('environmentName'), 'prod'), 'Disabled', 'Enabled')]",
+                "networkRuleBypassOptions": "AzureServices",
+                "policies": {
+                  "quarantinePolicy": {
+                    "status": "[if(parameters('enableVulnerabilityScanning'), 'enabled', 'disabled')]"
+                  },
+                  "trustPolicy": {
+                    "type": "Notary",
+                    "status": "[if(parameters('enableContentTrust'), 'enabled', 'disabled')]"
+                  },
+                  "retentionPolicy": {
+                    "days": "[parameters('retentionDays')]",
+                    "status": "enabled"
+                  },
+                  "exportPolicy": {
+                    "status": "[if(equals(parameters('environmentName'), 'prod'), 'disabled', 'enabled')]"
+                  }
+                },
+                "encryption": "[if(equals(parameters('environmentName'), 'prod'), createObject('status', 'enabled'), createObject('status', 'disabled'))]",
+                "dataEndpointEnabled": false,
+                "anonymousPullEnabled": false
+              }
+            },
+            {
+              "condition": "[and(parameters('enableGeoReplication'), equals(variables('skuName'), 'Premium'))]",
+              "type": "Microsoft.ContainerRegistry/registries/replications",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', variables('acrName'), format('{0}replica', parameters('secondaryLocation')))]",
+              "location": "[parameters('secondaryLocation')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "regionEndpointEnabled": true
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', variables('acrName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.ContainerRegistry/registries/tasks",
+              "apiVersion": "2019-04-01",
+              "name": "[format('{0}/{1}', variables('acrName'), 'purgeUntaggedManifests')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "platform": {
+                  "os": "Linux",
+                  "architecture": "amd64"
+                },
+                "agentConfiguration": {
+                  "cpu": 2
+                },
+                "step": {
+                  "type": "EncodedTask",
+                  "encodedTaskContent": "[base64('        version: v1.1.0\r\n        steps:\r\n          - cmd: acr purge --filter \"tourbus-frontend:.*\" --filter \"tourbus-backend:.*\" --untagged --ago ${retentionDays}d\r\n            disableWorkingDirectoryOverride: true\r\n            timeout: 3600\r\n      ')]"
+                },
+                "trigger": {
+                  "timerTriggers": [
+                    {
+                      "schedule": "0 2 * * *",
+                      "name": "dailyPurge"
+                    }
+                  ]
+                },
+                "timeout": 3600
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', variables('acrName'))]"
+              ]
+            },
+            {
+              "condition": "[parameters('enableVulnerabilityScanning')]",
+              "type": "Microsoft.ContainerRegistry/registries/webhooks",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', variables('acrName'), 'vulnerabilityscan')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "status": "enabled",
+                "scope": "*",
+                "actions": [
+                  "push",
+                  "quarantine"
+                ],
+                "serviceUri": "https://tourbus-security.azurewebsites.net/api/scan"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', variables('acrName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.ContainerRegistry/registries/webhooks",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', variables('acrName'), 'cicdwebhook')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "status": "enabled",
+                "scope": "*",
+                "actions": [
+                  "push"
+                ],
+                "serviceUri": "https://tourbus-deploy.azurewebsites.net/api/deploy"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', variables('acrName'))]"
+              ]
+            },
+            {
+              "copy": {
+                "name": "acrPullRole",
+                "count": "[length(parameters('pullPrincipalIds'))]"
+              },
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.ContainerRegistry/registries/{0}', variables('acrName'))]",
+              "name": "[guid(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), parameters('pullPrincipalIds')[copyIndex()], '7f951dda-4ed3-4680-a7ca-43fe172d538d')]",
+              "properties": {
+                "principalId": "[parameters('pullPrincipalIds')[copyIndex()]]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', variables('acrName'))]"
+              ]
+            },
+            {
+              "copy": {
+                "name": "acrPushRole",
+                "count": "[length(parameters('pushPrincipalIds'))]"
+              },
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.ContainerRegistry/registries/{0}', variables('acrName'))]",
+              "name": "[guid(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), parameters('pushPrincipalIds')[copyIndex()], '8311e382-0749-4cb8-b61a-304f252e45ec')]",
+              "properties": {
+                "principalId": "[parameters('pushPrincipalIds')[copyIndex()]]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '8311e382-0749-4cb8-b61a-304f252e45ec')]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', variables('acrName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Insights/diagnosticSettings",
+              "apiVersion": "2021-05-01-preview",
+              "scope": "[format('Microsoft.ContainerRegistry/registries/{0}', variables('acrName'))]",
+              "name": "acr-diagnostics",
+              "properties": {
+                "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', format('log-tourbus-{0}', parameters('environmentName')))]",
+                "logs": [
+                  {
+                    "category": "ContainerRegistryRepositoryEvents",
+                    "enabled": true
+                  },
+                  {
+                    "category": "ContainerRegistryLoginEvents",
+                    "enabled": true
+                  }
+                ],
+                "metrics": [
+                  {
+                    "category": "AllMetrics",
+                    "enabled": true
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', variables('acrName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "registryName": {
+              "type": "string",
+              "value": "[variables('acrName')]"
+            },
+            "registryLoginServer": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), '2023-07-01').loginServer]"
+            },
+            "registryId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.ContainerRegistry/registries', variables('acrName'))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('aksCluster-{0}', parameters('environmentName')))]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1))))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "[format('roleAssignments-{0}', parameters('environmentName'))]",
+      "resourceGroup": "[format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "keyVaultId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('keyVault-{0}', parameters('environmentName'))), '2022-09-01').outputs.id.value]"
+          },
+          "principalIds": {
+            "value": [
+              "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('postgresql-{0}', parameters('environmentName'))), '2022-09-01').outputs.principalId.value]",
+              "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('redis-{0}', parameters('environmentName'))), '2022-09-01').outputs.principalId.value]",
+              "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('aksCluster-{0}', parameters('environmentName'))), '2022-09-01').outputs.principalId.value]"
+            ]
+          },
+          "environmentName": {
+            "value": "[parameters('environmentName')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.37.4.10188",
+              "templateHash": "12766363588048723236"
+            }
+          },
+          "parameters": {
+            "keyVaultId": {
+              "type": "string",
+              "metadata": {
+                "description": "Key Vault resource ID"
+              }
+            },
+            "principalIds": {
+              "type": "array",
+              "metadata": {
+                "description": "Principal IDs that need Key Vault access"
+              }
+            },
+            "environmentName": {
+              "type": "string",
+              "metadata": {
+                "description": "Environment name"
+              }
+            }
+          },
+          "variables": {
+            "keyVaultSecretsUserRoleDefinitionId": "4633458b-17de-408a-b874-0445c86b69e6"
+          },
+          "resources": [
+            {
+              "copy": {
+                "name": "keyVaultRoleAssignments",
+                "count": "[length(parameters('principalIds'))]"
+              },
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.KeyVault/vaults/{0}', split(parameters('keyVaultId'), '/')[8])]",
+              "name": "[guid(resourceId('Microsoft.KeyVault/vaults', split(parameters('keyVaultId'), '/')[8]), parameters('principalIds')[copyIndex()], variables('keyVaultSecretsUserRoleDefinitionId'))]",
+              "properties": {
+                "principalId": "[parameters('principalIds')[copyIndex()]]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('keyVaultSecretsUserRoleDefinitionId'))]",
+                "principalType": "ServicePrincipal"
+              }
+            }
+          ],
+          "outputs": {
+            "assignmentCount": {
+              "type": "int",
+              "value": "[length(parameters('principalIds'))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('aksCluster-{0}', parameters('environmentName')))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('keyVault-{0}', parameters('environmentName')))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('postgresql-{0}', parameters('environmentName')))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('redis-{0}', parameters('environmentName')))]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1))))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "resourceGroupName": {
+      "type": "string",
+      "value": "[format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))]"
+    },
+    "aksClusterName": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('aksCluster-{0}', parameters('environmentName'))), '2022-09-01').outputs.clusterName.value]"
+    },
+    "aksClusterFqdn": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('aksCluster-{0}', parameters('environmentName'))), '2022-09-01').outputs.clusterFqdn.value]"
+    },
+    "keyVaultName": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('keyVault-{0}', parameters('environmentName'))), '2022-09-01').outputs.name.value]"
+    },
+    "keyVaultUri": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('keyVault-{0}', parameters('environmentName'))), '2022-09-01').outputs.uri.value]"
+    },
+    "applicationInsightsConnectionString": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('monitoring-{0}', parameters('environmentName'))), '2022-09-01').outputs.applicationInsightsConnectionString.value]"
+    },
+    "applicationInsightsInstrumentationKey": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('monitoring-{0}', parameters('environmentName'))), '2022-09-01').outputs.applicationInsightsInstrumentationKey.value]"
+    },
+    "containerRegistryName": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('containerRegistry-{0}', parameters('environmentName'))), '2022-09-01').outputs.registryName.value]"
+    },
+    "containerRegistryLoginServer": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('containerRegistry-{0}', parameters('environmentName'))), '2022-09-01').outputs.registryLoginServer.value]"
+    },
+    "postgresqlConnectionStringSecretUri": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('postgresql-{0}', parameters('environmentName'))), '2022-09-01').outputs.keyVaultSecretUri.value]"
+    },
+    "redisConnectionStringSecretUri": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('redis-{0}', parameters('environmentName'))), '2022-09-01').outputs.keyVaultSecretUri.value]"
+    },
+    "estimatedMonthlyCost": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('aksCluster-{0}', parameters('environmentName'))), '2022-09-01').outputs.estimatedMonthlyCost.value]"
+    },
+    "costOptimizationFeatures": {
+      "type": "array",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('RBCLeasingApp-{0}{1}', toUpper(take(parameters('environmentName'), 1)), toLower(skip(parameters('environmentName'), 1)))), 'Microsoft.Resources/deployments', format('aksCluster-{0}', parameters('environmentName'))), '2022-09-01').outputs.costOptimizationFeatures.value]"
+    }
+  }
+}

@@ -81,38 +81,21 @@ module keyVault 'modules/key-vault.bicep' = {
   ]
 }
 
-// Deploy infrastructure modules
-module containerApps 'modules/container-apps.bicep' = {
+// Deploy cost-effective AKS cluster for GitOps
+module aksCluster 'modules/aks-cost-effective.bicep' = {
   scope: resourceGroup
-  name: 'containerApps-${environmentName}'
+  name: 'aksCluster-${environmentName}'
   params: {
     environmentName: environmentName
     location: location
-    minReplicas: environmentName == 'prod' ? 1 : 0
-    maxReplicas: environmentName == 'prod' ? 10 : 3
     keyVaultName: keyVault.outputs.name
     logAnalyticsWorkspaceId: monitoring.outputs.workspaceId
-    logAnalyticsWorkspaceName: monitoring.outputs.workspaceName
-    applicationInsightsConnectionString: monitoring.outputs.applicationInsightsConnectionString
+    enableAutoShutdown: enableAutoShutdown
   }
   dependsOn: [
     monitoring
+    keyVault
   ]
-}
-
-module appService 'modules/app-service.bicep' = {
-  scope: resourceGroup
-  name: 'appService-${environmentName}'
-  params: {
-    environmentName: environmentName
-    location: location
-    alwaysOn: environmentName == 'prod'
-    sku: environmentName == 'prod' ? 'P1v3' : 'B1'
-    zoneRedundant: environmentName == 'prod'
-    keyVaultName: keyVault.outputs.name
-    postgresqlSecretUri: postgresql.outputs.keyVaultSecretUri
-    redisSecretUri: redis.outputs.keyVaultSecretUri
-  }
 }
 
 module postgresql 'modules/postgresql.bicep' = {
@@ -140,15 +123,7 @@ module redis 'modules/redis.bicep' = {
   }
 }
 
-module frontDoor 'modules/front-door.bicep' = if (environmentName == 'prod') {
-  scope: resourceGroup
-  name: 'frontDoor-${environmentName}'
-  params: {
-    environmentName: environmentName
-    backendAddress: containerApps.outputs.fqdn
-  }
-}
-
+// Front Door will be configured later via Kubernetes Ingress (nginx-ingress or similar)
 // Monitoring module moved earlier in deployment sequence
 
 // Container Registry for Docker images
@@ -163,8 +138,7 @@ module containerRegistry 'modules/container-registry.bicep' = {
     enableContentTrust: environmentName == 'prod'
     retentionDays: environmentName == 'prod' ? 90 : 30
     pullPrincipalIds: [
-      appService.outputs.principalId
-      containerApps.outputs.principalId
+      aksCluster.outputs.kubeletIdentityObjectId
     ]
     pushPrincipalIds: [] // GitHub Actions will use service principal authentication
     tags: {
@@ -174,8 +148,7 @@ module containerRegistry 'modules/container-registry.bicep' = {
     }
   }
   dependsOn: [
-    appService
-    containerApps
+    aksCluster
   ]
 }
 
@@ -183,9 +156,7 @@ module containerRegistry 'modules/container-registry.bicep' = {
 var servicePrincipalIds = [
   postgresql.outputs.principalId
   redis.outputs.principalId
-  appService.outputs.principalId
-  containerApps.outputs.principalId
-  containerApps.outputs.backendPrincipalId
+  aksCluster.outputs.principalId
 ]
 
 // Assign Key Vault access to all service principals
@@ -201,9 +172,8 @@ module roleAssignments 'modules/role-assignments.bicep' = {
 
 // Outputs
 output resourceGroupName string = resourceGroup.name
-output containerAppFrontendUrl string = containerApps.outputs.frontendUrl
-output containerAppBackendUrl string = containerApps.outputs.backendUrl
-output apiUrl string = appService.outputs.url
+output aksClusterName string = aksCluster.outputs.clusterName
+output aksClusterFqdn string = aksCluster.outputs.clusterFqdn
 output keyVaultName string = keyVault.outputs.name
 output keyVaultUri string = keyVault.outputs.uri
 output applicationInsightsConnectionString string = monitoring.outputs.applicationInsightsConnectionString
@@ -214,3 +184,7 @@ output containerRegistryLoginServer string = containerRegistry.outputs.registryL
 // Secret URIs for application configuration
 output postgresqlConnectionStringSecretUri string = postgresql.outputs.keyVaultSecretUri
 output redisConnectionStringSecretUri string = redis.outputs.keyVaultSecretUri
+
+// Cost optimization information
+output estimatedMonthlyCost string = aksCluster.outputs.estimatedMonthlyCost
+output costOptimizationFeatures array = aksCluster.outputs.costOptimizationFeatures

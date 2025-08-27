@@ -1,0 +1,138 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.37.4.10188",
+      "templateHash": "16182908499472687489"
+    }
+  },
+  "parameters": {
+    "environmentName": {
+      "type": "string",
+      "metadata": {
+        "description": "Environment name"
+      }
+    },
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "Location for resources"
+      }
+    },
+    "principalIds": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Principal IDs that need access to Key Vault"
+      }
+    },
+    "logAnalyticsWorkspaceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Log Analytics Workspace ID for diagnostic settings"
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2023-07-01",
+      "name": "[format('kv-rbc-{0}', parameters('environmentName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "sku": {
+          "family": "A",
+          "name": "standard"
+        },
+        "tenantId": "[subscription().tenantId]",
+        "enabledForDeployment": true,
+        "enabledForDiskEncryption": false,
+        "enabledForTemplateDeployment": true,
+        "enableSoftDelete": true,
+        "softDeleteRetentionInDays": "[if(equals(parameters('environmentName'), 'prod'), 90, 7)]",
+        "enableRbacAuthorization": true,
+        "enablePurgeProtection": true,
+        "publicNetworkAccess": "[if(equals(parameters('environmentName'), 'prod'), 'Disabled', 'Enabled')]",
+        "networkAcls": {
+          "defaultAction": "[if(equals(parameters('environmentName'), 'prod'), 'Deny', 'Allow')]",
+          "bypass": "AzureServices",
+          "ipRules": "[if(equals(parameters('environmentName'), 'prod'), createArray(), createArray(createObject('value', '0.0.0.0/0')))]",
+          "virtualNetworkRules": []
+        }
+      }
+    },
+    {
+      "copy": {
+        "name": "keyVaultSecretsOfficerRole",
+        "count": "[length(parameters('principalIds'))]"
+      },
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[format('Microsoft.KeyVault/vaults/{0}', format('kv-rbc-{0}', parameters('environmentName')))]",
+      "name": "[guid(resourceId('Microsoft.KeyVault/vaults', format('kv-rbc-{0}', parameters('environmentName'))), parameters('principalIds')[copyIndex()], 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7')]",
+      "properties": {
+        "principalId": "[parameters('principalIds')[copyIndex()]]",
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7')]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', format('kv-rbc-{0}', parameters('environmentName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.EventGrid/systemTopics",
+      "apiVersion": "2023-12-15-preview",
+      "name": "[format('eg-keyvault-{0}', parameters('environmentName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "source": "[resourceId('Microsoft.KeyVault/vaults', format('kv-rbc-{0}', parameters('environmentName')))]",
+        "topicType": "Microsoft.KeyVault.vaults"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', format('kv-rbc-{0}', parameters('environmentName')))]"
+      ]
+    },
+    {
+      "condition": "[not(empty(parameters('logAnalyticsWorkspaceId')))]",
+      "type": "Microsoft.Insights/diagnosticSettings",
+      "apiVersion": "2021-05-01-preview",
+      "scope": "[format('Microsoft.KeyVault/vaults/{0}', format('kv-rbc-{0}', parameters('environmentName')))]",
+      "name": "keyvault-audit-logs",
+      "properties": {
+        "logs": [
+          {
+            "category": "AuditEvent",
+            "enabled": true
+          }
+        ],
+        "metrics": [
+          {
+            "category": "AllMetrics",
+            "enabled": true
+          }
+        ],
+        "workspaceId": "[parameters('logAnalyticsWorkspaceId')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', format('kv-rbc-{0}', parameters('environmentName')))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "name": {
+      "type": "string",
+      "value": "[format('kv-rbc-{0}', parameters('environmentName'))]"
+    },
+    "uri": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.KeyVault/vaults', format('kv-rbc-{0}', parameters('environmentName'))), '2023-07-01').vaultUri]"
+    },
+    "id": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.KeyVault/vaults', format('kv-rbc-{0}', parameters('environmentName')))]"
+    }
+  }
+}

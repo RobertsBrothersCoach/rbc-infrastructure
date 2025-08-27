@@ -17,7 +17,10 @@
       "Bash(gh run view:*)",
       "Bash(gh workflow run:*)",
       "Bash(gh workflow:*)",
-      "Bash(gh run watch:*)"
+      "Bash(gh run watch:*)",
+      "Bash(gh issue close:*)",
+      "Bash(az resource list:*)",
+      "Bash(az bicep build:*)"
     ],
     "deny": [],
     "ask": []

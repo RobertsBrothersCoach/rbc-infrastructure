@@ -1,0 +1,366 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.37.4.10188",
+      "templateHash": "14518244156202866700"
+    }
+  },
+  "parameters": {
+    "environmentName": {
+      "type": "string",
+      "metadata": {
+        "description": "Environment name"
+      }
+    },
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "Location for resources"
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2023-09-01",
+      "name": "[format('vnet-rbc-{0}', parameters('environmentName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "10.0.0.0/16"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "snet-app-services",
+            "properties": {
+              "addressPrefix": "10.0.1.0/24",
+              "serviceEndpoints": [
+                {
+                  "service": "Microsoft.KeyVault"
+                },
+                {
+                  "service": "Microsoft.Storage"
+                },
+                {
+                  "service": "Microsoft.Sql"
+                }
+              ],
+              "delegations": [
+                {
+                  "name": "delegation-app-services",
+                  "properties": {
+                    "serviceName": "Microsoft.Web/serverFarms"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "snet-database",
+            "properties": {
+              "addressPrefix": "10.0.2.0/24",
+              "serviceEndpoints": [
+                {
+                  "service": "Microsoft.Storage"
+                }
+              ],
+              "delegations": [
+                {
+                  "name": "delegation-postgresql",
+                  "properties": {
+                    "serviceName": "Microsoft.DBforPostgreSQL/flexibleServers"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "snet-redis",
+            "properties": {
+              "addressPrefix": "10.0.3.0/24",
+              "privateEndpointNetworkPolicies": "Disabled"
+            }
+          },
+          {
+            "name": "snet-private-endpoints",
+            "properties": {
+              "addressPrefix": "10.0.4.0/24",
+              "privateEndpointNetworkPolicies": "Disabled"
+            }
+          },
+          {
+            "name": "snet-container-apps",
+            "properties": {
+              "addressPrefix": "10.0.5.0/24",
+              "delegations": [
+                {
+                  "name": "delegation-container-apps",
+                  "properties": {
+                    "serviceName": "Microsoft.App/environments"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2023-09-01",
+      "name": "[format('nsg-app-services-{0}', parameters('environmentName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "AllowHTTPS",
+            "properties": {
+              "priority": 100,
+              "direction": "Inbound",
+              "access": "Allow",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "Internet",
+              "destinationAddressPrefix": "*"
+            }
+          },
+          {
+            "name": "AllowHTTP",
+            "properties": {
+              "priority": 110,
+              "direction": "Inbound",
+              "access": "[if(equals(parameters('environmentName'), 'prod'), 'Deny', 'Allow')]",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "80",
+              "sourceAddressPrefix": "Internet",
+              "destinationAddressPrefix": "*"
+            }
+          },
+          {
+            "name": "DenyAllInbound",
+            "properties": {
+              "priority": 1000,
+              "direction": "Inbound",
+              "access": "Deny",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2023-09-01",
+      "name": "[format('nsg-database-{0}', parameters('environmentName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "AllowPostgreSQLFromAppServices",
+            "properties": {
+              "priority": 100,
+              "direction": "Inbound",
+              "access": "Allow",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "5432",
+              "sourceAddressPrefix": "10.0.1.0/24",
+              "destinationAddressPrefix": "*"
+            }
+          },
+          {
+            "name": "AllowPostgreSQLFromContainerApps",
+            "properties": {
+              "priority": 110,
+              "direction": "Inbound",
+              "access": "Allow",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "5432",
+              "sourceAddressPrefix": "10.0.5.0/24",
+              "destinationAddressPrefix": "*"
+            }
+          },
+          {
+            "name": "DenyAllInbound",
+            "properties": {
+              "priority": 1000,
+              "direction": "Inbound",
+              "access": "Deny",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "condition": "[equals(parameters('environmentName'), 'prod')]",
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "2020-06-01",
+      "name": "privatelink.vaultcore.azure.net",
+      "location": "global",
+      "properties": {}
+    },
+    {
+      "condition": "[equals(parameters('environmentName'), 'prod')]",
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "2020-06-01",
+      "name": "privatelink.postgres.database.azure.com",
+      "location": "global",
+      "properties": {}
+    },
+    {
+      "condition": "[equals(parameters('environmentName'), 'prod')]",
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "2020-06-01",
+      "name": "privatelink.redis.cache.windows.net",
+      "location": "global",
+      "properties": {}
+    },
+    {
+      "condition": "[equals(parameters('environmentName'), 'prod')]",
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2020-06-01",
+      "name": "[format('{0}/{1}', 'privatelink.vaultcore.azure.net', format('{0}-link', format('vnet-rbc-{0}', parameters('environmentName'))))]",
+      "location": "global",
+      "properties": {
+        "registrationEnabled": false,
+        "virtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks', format('vnet-rbc-{0}', parameters('environmentName')))]"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.vaultcore.azure.net')]",
+        "[resourceId('Microsoft.Network/virtualNetworks', format('vnet-rbc-{0}', parameters('environmentName')))]"
+      ]
+    },
+    {
+      "condition": "[equals(parameters('environmentName'), 'prod')]",
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2020-06-01",
+      "name": "[format('{0}/{1}', 'privatelink.postgres.database.azure.com', format('{0}-link', format('vnet-rbc-{0}', parameters('environmentName'))))]",
+      "location": "global",
+      "properties": {
+        "registrationEnabled": false,
+        "virtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks', format('vnet-rbc-{0}', parameters('environmentName')))]"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.postgres.database.azure.com')]",
+        "[resourceId('Microsoft.Network/virtualNetworks', format('vnet-rbc-{0}', parameters('environmentName')))]"
+      ]
+    },
+    {
+      "condition": "[equals(parameters('environmentName'), 'prod')]",
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2020-06-01",
+      "name": "[format('{0}/{1}', 'privatelink.redis.cache.windows.net', format('{0}-link', format('vnet-rbc-{0}', parameters('environmentName'))))]",
+      "location": "global",
+      "properties": {
+        "registrationEnabled": false,
+        "virtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks', format('vnet-rbc-{0}', parameters('environmentName')))]"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.redis.cache.windows.net')]",
+        "[resourceId('Microsoft.Network/virtualNetworks', format('vnet-rbc-{0}', parameters('environmentName')))]"
+      ]
+    },
+    {
+      "condition": "[equals(parameters('environmentName'), 'prod')]",
+      "type": "Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies",
+      "apiVersion": "2023-09-01",
+      "name": "[format('waf-rbc-{0}', parameters('environmentName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "customRules": [],
+        "policySettings": {
+          "requestBodyCheck": true,
+          "maxRequestBodySizeInKb": 128,
+          "fileUploadLimitInMb": 10,
+          "state": "Enabled",
+          "mode": "Prevention"
+        },
+        "managedRules": {
+          "managedRuleSets": [
+            {
+              "ruleSetType": "OWASP",
+              "ruleSetVersion": "3.2"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "condition": "[equals(parameters('environmentName'), 'prod')]",
+      "type": "Microsoft.Network/ddosProtectionPlans",
+      "apiVersion": "2023-09-01",
+      "name": "[format('ddos-rbc-{0}', parameters('environmentName'))]",
+      "location": "[parameters('location')]",
+      "properties": {}
+    }
+  ],
+  "outputs": {
+    "vnetId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Network/virtualNetworks', format('vnet-rbc-{0}', parameters('environmentName')))]"
+    },
+    "appServicesSubnetId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Network/virtualNetworks', format('vnet-rbc-{0}', parameters('environmentName'))), '2023-09-01').subnets[0].id]"
+    },
+    "databaseSubnetId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Network/virtualNetworks', format('vnet-rbc-{0}', parameters('environmentName'))), '2023-09-01').subnets[1].id]"
+    },
+    "redisSubnetId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Network/virtualNetworks', format('vnet-rbc-{0}', parameters('environmentName'))), '2023-09-01').subnets[2].id]"
+    },
+    "privateEndpointsSubnetId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Network/virtualNetworks', format('vnet-rbc-{0}', parameters('environmentName'))), '2023-09-01').subnets[3].id]"
+    },
+    "containerAppsSubnetId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Network/virtualNetworks', format('vnet-rbc-{0}', parameters('environmentName'))), '2023-09-01').subnets[4].id]"
+    },
+    "privateDnsZoneKeyVaultId": {
+      "type": "string",
+      "value": "[if(equals(parameters('environmentName'), 'prod'), resourceId('Microsoft.Network/privateDnsZones', 'privatelink.vaultcore.azure.net'), '')]"
+    },
+    "privateDnsZonePostgreSQLId": {
+      "type": "string",
+      "value": "[if(equals(parameters('environmentName'), 'prod'), resourceId('Microsoft.Network/privateDnsZones', 'privatelink.postgres.database.azure.com'), '')]"
+    },
+    "privateDnsZoneRedisId": {
+      "type": "string",
+      "value": "[if(equals(parameters('environmentName'), 'prod'), resourceId('Microsoft.Network/privateDnsZones', 'privatelink.redis.cache.windows.net'), '')]"
+    },
+    "wafPolicyId": {
+      "type": "string",
+      "value": "[if(equals(parameters('environmentName'), 'prod'), resourceId('Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies', format('waf-rbc-{0}', parameters('environmentName'))), '')]"
+    },
+    "ddosProtectionPlanId": {
+      "type": "string",
+      "value": "[if(equals(parameters('environmentName'), 'prod'), resourceId('Microsoft.Network/ddosProtectionPlans', format('ddos-rbc-{0}', parameters('environmentName'))), '')]"
+    }
+  }
+}

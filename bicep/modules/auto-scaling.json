@@ -1,0 +1,455 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.37.4.10188",
+      "templateHash": "10599833415173351699"
+    }
+  },
+  "parameters": {
+    "environmentName": {
+      "type": "string",
+      "allowedValues": [
+        "dev",
+        "qa",
+        "prod"
+      ],
+      "metadata": {
+        "description": "Environment name"
+      }
+    },
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "Location for resources"
+      }
+    },
+    "appServicePlanName": {
+      "type": "string",
+      "metadata": {
+        "description": "App Service Plan name to configure auto-scaling for"
+      }
+    },
+    "containerAppsEnvironmentName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Container Apps Environment name to configure auto-scaling for"
+      }
+    },
+    "applicationInsightsId": {
+      "type": "string",
+      "metadata": {
+        "description": "Application Insights resource ID for monitoring"
+      }
+    },
+    "postgresqlServerName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "PostgreSQL Server name to configure auto-scaling for"
+      }
+    },
+    "redisCacheName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Redis Cache name to configure auto-scaling for"
+      }
+    }
+  },
+  "variables": {
+    "scalingProfiles": {
+      "dev": {
+        "minInstances": 0,
+        "maxInstances": 2,
+        "defaultInstances": 1,
+        "cpuThresholdHigh": 80,
+        "cpuThresholdLow": 30,
+        "memoryThresholdHigh": 80,
+        "memoryThresholdLow": 40,
+        "httpQueueThreshold": 10,
+        "scaleOutCooldown": "PT5M",
+        "scaleInCooldown": "PT10M",
+        "enableScheduledScaling": false
+      },
+      "qa": {
+        "minInstances": 1,
+        "maxInstances": 3,
+        "defaultInstances": 1,
+        "cpuThresholdHigh": 75,
+        "cpuThresholdLow": 30,
+        "memoryThresholdHigh": 75,
+        "memoryThresholdLow": 35,
+        "httpQueueThreshold": 15,
+        "scaleOutCooldown": "PT5M",
+        "scaleInCooldown": "PT10M",
+        "enableScheduledScaling": true
+      },
+      "prod": {
+        "minInstances": 2,
+        "maxInstances": 10,
+        "defaultInstances": 3,
+        "cpuThresholdHigh": 70,
+        "cpuThresholdLow": 25,
+        "memoryThresholdHigh": 70,
+        "memoryThresholdLow": 30,
+        "httpQueueThreshold": 20,
+        "scaleOutCooldown": "PT3M",
+        "scaleInCooldown": "PT5M",
+        "enableScheduledScaling": true
+      }
+    },
+    "currentProfile": "[variables('scalingProfiles')[parameters('environmentName')]]"
+  },
+  "resources": [
+    {
+      "condition": "[not(empty(parameters('appServicePlanName')))]",
+      "type": "Microsoft.Insights/autoscalesettings",
+      "apiVersion": "2022-10-01",
+      "name": "[format('autoscale-{0}', parameters('appServicePlanName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "enabled": true,
+        "targetResourceUri": "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
+        "profiles": [
+          {
+            "name": "Default scaling profile",
+            "capacity": {
+              "minimum": "[string(variables('currentProfile').minInstances)]",
+              "maximum": "[string(variables('currentProfile').maxInstances)]",
+              "default": "[string(variables('currentProfile').defaultInstances)]"
+            },
+            "rules": [
+              {
+                "metricTrigger": {
+                  "metricName": "CpuPercentage",
+                  "metricNamespace": "microsoft.web/serverfarms",
+                  "metricResourceUri": "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
+                  "timeGrain": "PT1M",
+                  "statistic": "Average",
+                  "timeWindow": "PT5M",
+                  "timeAggregation": "Average",
+                  "operator": "GreaterThan",
+                  "threshold": "[variables('currentProfile').cpuThresholdHigh]"
+                },
+                "scaleAction": {
+                  "direction": "Increase",
+                  "type": "ChangeCount",
+                  "value": "1",
+                  "cooldown": "[variables('currentProfile').scaleOutCooldown]"
+                }
+              },
+              {
+                "metricTrigger": {
+                  "metricName": "CpuPercentage",
+                  "metricNamespace": "microsoft.web/serverfarms",
+                  "metricResourceUri": "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
+                  "timeGrain": "PT1M",
+                  "statistic": "Average",
+                  "timeWindow": "PT10M",
+                  "timeAggregation": "Average",
+                  "operator": "LessThan",
+                  "threshold": "[variables('currentProfile').cpuThresholdLow]"
+                },
+                "scaleAction": {
+                  "direction": "Decrease",
+                  "type": "ChangeCount",
+                  "value": "1",
+                  "cooldown": "[variables('currentProfile').scaleInCooldown]"
+                }
+              },
+              {
+                "metricTrigger": {
+                  "metricName": "MemoryPercentage",
+                  "metricNamespace": "microsoft.web/serverfarms",
+                  "metricResourceUri": "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
+                  "timeGrain": "PT1M",
+                  "statistic": "Average",
+                  "timeWindow": "PT5M",
+                  "timeAggregation": "Average",
+                  "operator": "GreaterThan",
+                  "threshold": "[variables('currentProfile').memoryThresholdHigh]"
+                },
+                "scaleAction": {
+                  "direction": "Increase",
+                  "type": "ChangeCount",
+                  "value": "1",
+                  "cooldown": "[variables('currentProfile').scaleOutCooldown]"
+                }
+              },
+              {
+                "metricTrigger": {
+                  "metricName": "MemoryPercentage",
+                  "metricNamespace": "microsoft.web/serverfarms",
+                  "metricResourceUri": "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
+                  "timeGrain": "PT1M",
+                  "statistic": "Average",
+                  "timeWindow": "PT10M",
+                  "timeAggregation": "Average",
+                  "operator": "LessThan",
+                  "threshold": "[variables('currentProfile').memoryThresholdLow]"
+                },
+                "scaleAction": {
+                  "direction": "Decrease",
+                  "type": "ChangeCount",
+                  "value": "1",
+                  "cooldown": "[variables('currentProfile').scaleInCooldown]"
+                }
+              },
+              {
+                "metricTrigger": {
+                  "metricName": "HttpQueueLength",
+                  "metricNamespace": "microsoft.web/serverfarms",
+                  "metricResourceUri": "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
+                  "timeGrain": "PT1M",
+                  "statistic": "Average",
+                  "timeWindow": "PT5M",
+                  "timeAggregation": "Average",
+                  "operator": "GreaterThan",
+                  "threshold": "[variables('currentProfile').httpQueueThreshold]"
+                },
+                "scaleAction": {
+                  "direction": "Increase",
+                  "type": "ChangeCount",
+                  "value": "2",
+                  "cooldown": "PT3M"
+                }
+              }
+            ]
+          },
+          {
+            "name": "Weekend scale-down",
+            "capacity": {
+              "minimum": "[string(if(equals(parameters('environmentName'), 'prod'), 1, 0))]",
+              "maximum": "[string(if(equals(parameters('environmentName'), 'prod'), 3, 1))]",
+              "default": "[string(if(equals(parameters('environmentName'), 'prod'), 1, 0))]"
+            },
+            "rules": [],
+            "recurrence": "[if(variables('currentProfile').enableScheduledScaling, createObject('frequency', 'Week', 'schedule', createObject('timeZone', 'Eastern Standard Time', 'days', createArray('Saturday', 'Sunday'), 'hours', createArray(0), 'minutes', createArray(0))), null())]"
+          },
+          {
+            "name": "Night time scale-down",
+            "capacity": {
+              "minimum": "[string(if(equals(parameters('environmentName'), 'prod'), 1, 0))]",
+              "maximum": "[string(if(equals(parameters('environmentName'), 'prod'), 2, 1))]",
+              "default": "[string(if(equals(parameters('environmentName'), 'prod'), 1, 0))]"
+            },
+            "rules": [],
+            "recurrence": "[if(variables('currentProfile').enableScheduledScaling, createObject('frequency', 'Day', 'schedule', createObject('timeZone', 'Eastern Standard Time', 'days', createArray('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'), 'hours', createArray(20), 'minutes', createArray(0))), null())]"
+          },
+          {
+            "name": "Business hours scale-up",
+            "capacity": {
+              "minimum": "[string(variables('currentProfile').minInstances)]",
+              "maximum": "[string(variables('currentProfile').maxInstances)]",
+              "default": "[string(variables('currentProfile').defaultInstances)]"
+            },
+            "rules": [
+              {
+                "metricTrigger": {
+                  "metricName": "CpuPercentage",
+                  "metricNamespace": "microsoft.web/serverfarms",
+                  "metricResourceUri": "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
+                  "timeGrain": "PT1M",
+                  "statistic": "Average",
+                  "timeWindow": "PT5M",
+                  "timeAggregation": "Average",
+                  "operator": "GreaterThan",
+                  "threshold": "[sub(variables('currentProfile').cpuThresholdHigh, 10)]"
+                },
+                "scaleAction": {
+                  "direction": "Increase",
+                  "type": "ChangeCount",
+                  "value": "1",
+                  "cooldown": "PT3M"
+                }
+              }
+            ],
+            "recurrence": "[if(variables('currentProfile').enableScheduledScaling, createObject('frequency', 'Day', 'schedule', createObject('timeZone', 'Eastern Standard Time', 'days', createArray('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'), 'hours', createArray(7), 'minutes', createArray(0))), null())]"
+          }
+        ],
+        "notifications": [
+          {
+            "operation": "Scale",
+            "email": {
+              "sendToSubscriptionAdministrator": true,
+              "sendToSubscriptionCoAdministrators": true,
+              "customEmails": []
+            },
+            "webhooks": []
+          }
+        ]
+      }
+    },
+    {
+      "condition": "[not(empty(parameters('appServicePlanName')))]",
+      "type": "Microsoft.Insights/metricAlerts",
+      "apiVersion": "2018-03-01",
+      "name": "[format('{0}-high-cpu-alert', parameters('appServicePlanName'))]",
+      "location": "global",
+      "properties": {
+        "description": "Alert when CPU usage remains high after scaling",
+        "severity": 2,
+        "enabled": true,
+        "scopes": [
+          "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]"
+        ],
+        "evaluationFrequency": "PT5M",
+        "windowSize": "PT15M",
+        "criteria": {
+          "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+          "allOf": [
+            {
+              "name": "HighCpuCondition",
+              "metricName": "CpuPercentage",
+              "operator": "GreaterThan",
+              "threshold": 90,
+              "timeAggregation": "Average"
+            }
+          ]
+        },
+        "actions": []
+      }
+    },
+    {
+      "condition": "[not(empty(parameters('appServicePlanName')))]",
+      "type": "Microsoft.Insights/metricAlerts",
+      "apiVersion": "2018-03-01",
+      "name": "[format('{0}-high-memory-alert', parameters('appServicePlanName'))]",
+      "location": "global",
+      "properties": {
+        "description": "Alert when memory usage remains high after scaling",
+        "severity": 2,
+        "enabled": true,
+        "scopes": [
+          "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]"
+        ],
+        "evaluationFrequency": "PT5M",
+        "windowSize": "PT15M",
+        "criteria": {
+          "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+          "allOf": [
+            {
+              "name": "HighMemoryCondition",
+              "metricName": "MemoryPercentage",
+              "operator": "GreaterThan",
+              "threshold": 85,
+              "timeAggregation": "Average"
+            }
+          ]
+        },
+        "actions": []
+      }
+    },
+    {
+      "condition": "[not(empty(parameters('postgresqlServerName')))]",
+      "type": "Microsoft.Insights/metricAlerts",
+      "apiVersion": "2018-03-01",
+      "name": "[format('{0}-connection-limit-alert', parameters('postgresqlServerName'))]",
+      "location": "global",
+      "properties": {
+        "description": "Alert when database connections approach limit",
+        "severity": 1,
+        "enabled": true,
+        "scopes": [
+          "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('postgresqlServerName'))]"
+        ],
+        "evaluationFrequency": "PT1M",
+        "windowSize": "PT5M",
+        "criteria": {
+          "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+          "allOf": [
+            {
+              "name": "HighConnectionCount",
+              "metricName": "active_connections",
+              "operator": "GreaterThan",
+              "threshold": 80,
+              "timeAggregation": "Average"
+            }
+          ]
+        },
+        "actions": []
+      }
+    },
+    {
+      "condition": "[not(empty(parameters('redisCacheName')))]",
+      "type": "Microsoft.Insights/metricAlerts",
+      "apiVersion": "2018-03-01",
+      "name": "[format('{0}-memory-alert', parameters('redisCacheName'))]",
+      "location": "global",
+      "properties": {
+        "description": "Alert when Redis memory usage is high",
+        "severity": 2,
+        "enabled": true,
+        "scopes": [
+          "[resourceId('Microsoft.Cache/redis', parameters('redisCacheName'))]"
+        ],
+        "evaluationFrequency": "PT5M",
+        "windowSize": "PT15M",
+        "criteria": {
+          "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+          "allOf": [
+            {
+              "name": "HighMemoryUsage",
+              "metricName": "UsedMemoryPercentage",
+              "operator": "GreaterThan",
+              "threshold": 75,
+              "timeAggregation": "Average"
+            }
+          ]
+        },
+        "actions": []
+      }
+    },
+    {
+      "type": "Microsoft.Insights/metricAlerts",
+      "apiVersion": "2018-03-01",
+      "name": "app-high-response-time-alert",
+      "location": "global",
+      "properties": {
+        "description": "Alert when application response time is high",
+        "severity": 2,
+        "enabled": true,
+        "scopes": [
+          "[parameters('applicationInsightsId')]"
+        ],
+        "evaluationFrequency": "PT1M",
+        "windowSize": "PT5M",
+        "criteria": {
+          "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+          "allOf": [
+            {
+              "name": "HighResponseTime",
+              "metricName": "requests/duration",
+              "operator": "GreaterThan",
+              "threshold": 2000,
+              "timeAggregation": "Average"
+            }
+          ]
+        },
+        "actions": []
+      }
+    }
+  ],
+  "outputs": {
+    "autoScaleSettingsId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Insights/autoscalesettings', format('autoscale-{0}', parameters('appServicePlanName')))]"
+    },
+    "scalingConfiguration": {
+      "type": "object",
+      "value": {
+        "environment": "[parameters('environmentName')]",
+        "minInstances": "[variables('currentProfile').minInstances]",
+        "maxInstances": "[variables('currentProfile').maxInstances]",
+        "cpuThresholdHigh": "[variables('currentProfile').cpuThresholdHigh]",
+        "memoryThresholdHigh": "[variables('currentProfile').memoryThresholdHigh]",
+        "scaleOutCooldown": "[variables('currentProfile').scaleOutCooldown]",
+        "scaleInCooldown": "[variables('currentProfile').scaleInCooldown]"
+      }
+    }
+  }
+}
