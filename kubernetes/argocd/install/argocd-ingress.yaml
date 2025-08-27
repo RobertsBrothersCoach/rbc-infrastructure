@@ -1,0 +1,46 @@
+# ArgoCD Ingress for external access
+# Using nginx-ingress for cost-effective load balancing
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-server-ingress
+  namespace: argocd
+  annotations:
+    # Use nginx ingress controller (cost-effective)
+    kubernetes.io/ingress.class: nginx
+    
+    # SSL redirect and backend protocol
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    
+    # ArgoCD specific configuration
+    nginx.ingress.kubernetes.io/server-snippet: |
+      grpc_read_timeout 300;
+      grpc_send_timeout 300;
+      client_body_timeout 60;
+      client_header_timeout 60;
+      client_max_body_size 1m;
+      
+  labels:
+    app.kubernetes.io/name: argocd-server
+    app.kubernetes.io/component: server
+    
+spec:
+  rules:
+  - host: argocd-dev.rbc-leasing.com  # Will be configured with DNS later
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: argocd-server
+            port:
+              number: 80
+              
+  # TLS will be configured later with cert-manager
+  # tls:
+  # - hosts:
+  #   - argocd-dev.rbc-leasing.com
+  #   secretName: argocd-tls

@@ -1,0 +1,171 @@
+# ArgoCD Installation with cost-optimized configuration
+# This installs ArgoCD v2.11.7 (stable) with minimal resource requirements for dev environment
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cmd-params-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-cmd-params-cm
+    app.kubernetes.io/part-of: argocd
+data:
+  # Enable insecure mode for cost savings (no TLS between components)
+  server.insecure: "true"
+  # Reduce resource usage
+  controller.repo.server.timeout.seconds: "60"
+  controller.status.processors: "5"
+  controller.operation.processors: "5"
+
+---
+# ArgoCD Server configuration for Azure AD integration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-cm
+    app.kubernetes.io/part-of: argocd
+data:
+  # Server configuration
+  url: "https://argocd.rbc-leasing.com"
+  application.instanceLabelKey: argocd.argoproj.io/instance
+  
+  # Repository configuration
+  repositories: |
+    - type: git
+      url: https://github.com/RobertsBrothersCoach/rbc-infrastructure
+      name: rbc-infrastructure
+    - type: git
+      url: https://github.com/RobertsBrothersCoach/rbc-leasing-app
+      name: rbc-leasing-app
+
+  # OIDC configuration for Azure AD (to be configured later)
+  oidc.config: |
+    name: Azure AD
+    issuer: https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
+    clientId: $oidc.azuread.clientId
+    clientSecret: $oidc.azuread.clientSecret
+    requestedScopes: ["openid", "profile", "email", "groups"]
+    requestedIDTokenClaims: {"groups": {"essential": true}}
+
+---
+# RBAC Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-rbac-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-rbac-cm  
+    app.kubernetes.io/part-of: argocd
+data:
+  policy.default: role:readonly
+  policy.csv: |
+    # Admin users (Azure AD group)
+    g, rbc-infrastructure-admins, role:admin
+    
+    # Developer users (Azure AD group) 
+    g, rbc-developers, role:dev
+    
+    # Custom role for developers
+    p, role:dev, applications, get, */*, allow
+    p, role:dev, applications, action/*, */*, allow
+    p, role:dev, logs, get, */*, allow
+    p, role:dev, exec, create, */*, allow
+
+---
+# Install ArgoCD using the official stable release
+apiVersion: kustomization.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: argocd
+
+resources:
+  # ArgoCD v2.11.7 - stable release
+  - https://raw.githubusercontent.com/argoproj/argo-cd/v2.11.7/manifests/install.yaml
+
+patchesStrategicMerge:
+  # Cost optimization patches
+  - |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: argocd-server
+    spec:
+      replicas: 1  # Single replica for dev
+      template:
+        spec:
+          containers:
+          - name: argocd-server
+            resources:
+              requests:
+                cpu: "50m"
+                memory: "64Mi"
+              limits:
+                cpu: "200m"
+                memory: "256Mi"
+            # Enable insecure mode (no TLS termination)
+            command:
+            - argocd-server
+            - --insecure
+            - --staticassets
+            - /shared/app
+            
+  - |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: argocd-application-controller
+    spec:
+      replicas: 1
+      template:
+        spec:
+          containers:
+          - name: argocd-application-controller
+            resources:
+              requests:
+                cpu: "100m"
+                memory: "128Mi"
+              limits:
+                cpu: "500m"
+                memory: "512Mi"
+                
+  - |-
+    apiVersion: apps/v1
+    kind: Deployment  
+    metadata:
+      name: argocd-repo-server
+    spec:
+      replicas: 1
+      template:
+        spec:
+          containers:
+          - name: argocd-repo-server
+            resources:
+              requests:
+                cpu: "50m"
+                memory: "64Mi"
+              limits:
+                cpu: "200m"
+                memory: "256Mi"
+
+  - |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: argocd-redis
+    spec:
+      replicas: 1
+      template:
+        spec:
+          containers:
+          - name: redis
+            resources:
+              requests:
+                cpu: "25m"
+                memory: "32Mi"
+              limits:
+                cpu: "100m"
+                memory: "128Mi"
