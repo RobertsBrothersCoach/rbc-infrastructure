@@ -32,7 +32,7 @@ param pushPrincipalIds array = []
 // Variables
 // Use fixed name 'acrtourbus' to match GitHub Actions workflow expectations
 var acrName = 'acrtourbus'
-var skuName = environmentName == 'prod' ? 'Premium' : 'Standard'
+var skuName = environmentName == 'prod' ? 'Premium' : 'Basic'
 
 // Azure Container Registry
 resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
