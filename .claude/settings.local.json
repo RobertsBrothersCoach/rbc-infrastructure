@@ -30,7 +30,10 @@
       "Bash(az ad sp show:*)",
       "Bash(find:*)",
       "Bash(az deployment sub show:*)",
-      "Bash(az aks get-versions:*)"
+      "Bash(az aks get-versions:*)",
+      "Bash(az provider register:*)",
+      "Bash(az aks delete:*)",
+      "Bash(az aks wait:*)"
     ],
     "deny": [],
     "ask": []

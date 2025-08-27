@@ -129,27 +129,11 @@ resource aksCredentialSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   }
 }
 
-// Auto-shutdown schedule for cost savings (dev only)
-resource autoShutdownSchedule 'Microsoft.DevTestLab/schedules@2018-09-15' = if (enableAutoShutdown && environmentName != 'prod') {
-  name: 'shutdown-computevm-aks-rbcleasing-${environmentName}'
-  location: location
-  properties: {
-    status: 'Enabled'
-    taskType: 'ComputeVmShutdownTask'
-    dailyRecurrence: {
-      time: '1900' // 7 PM shutdown
-    }
-    timeZoneId: 'Eastern Standard Time'
-    targetResourceId: aksCluster.id
-    notificationSettings: {
-      status: 'Disabled'
-    }
-  }
-  tags: {
-    Environment: environmentName
-    Purpose: 'CostOptimization'
-  }
-}
+// Note: Auto-shutdown schedules don't support AKS clusters directly
+// For cost optimization, we rely on:
+// 1. Auto-scaling to minimum nodes during low usage
+// 2. Spot instances for non-critical workloads (future enhancement)
+// 3. Pod autoscaling and resource limits
 
 // Role assignments for AKS - now that service principal has User Access Administrator role
 resource aksContainerRegistryPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
