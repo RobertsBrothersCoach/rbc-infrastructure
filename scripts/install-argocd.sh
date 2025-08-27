@@ -1,11 +1,15 @@
 #!/bin/bash
 
-# Install ArgoCD on AKS cluster - Cost-optimized for dev environment
-# This script installs ArgoCD with minimal resource requirements
+# Install ArgoCD on AKS cluster with custom domain support
+# This script installs ArgoCD with minimal resource requirements and *.cloud.rbccoach.com domain
 
 set -e
 
-echo "🚀 Installing ArgoCD on AKS cluster..."
+DOMAIN="cloud.rbccoach.com"
+ARGOCD_URL="argocd-dev.${DOMAIN}"
+
+echo "🚀 Installing ArgoCD on AKS cluster with custom domain..."
+echo "Domain: https://${ARGOCD_URL}"
 
 # Check if kubectl is configured
 if ! kubectl cluster-info &> /dev/null; then
@@ -96,23 +100,34 @@ PORT_FORWARD_PID=$!
 # Wait a moment for port forward to establish
 sleep 3
 
+# Apply custom domain ingress configuration
+echo "🌐 Configuring custom domain ingress..."
+kubectl apply -f kubernetes/argocd/install/argocd-ingress.yaml
+
 echo ""
-echo "✅ ArgoCD installation completed!"
+echo "✅ ArgoCD installation completed with custom domain!"
 echo ""
 echo "📋 Access Information:"
-echo "   URL: https://localhost:8080"
-echo "   Username: admin"
-echo "   Password: $ARGOCD_PASSWORD"
+echo "   🌐 Custom Domain: https://${ARGOCD_URL}"
+echo "   🔒 Local Access: https://localhost:8080 (port-forward)"
+echo "   👤 Username: admin"
+echo "   🔑 Password: $ARGOCD_PASSWORD"
 echo ""
 echo "💰 Cost Optimization Applied:"
 echo "   - Single replica for all components"
 echo "   - Minimal resource requests (CPU: 225m total, Memory: 288Mi total)"
 echo "   - Resource limits to prevent overspend"
+echo "   - Basic Load Balancer with nginx-ingress"
 echo ""
 echo "🔧 Next Steps:"
-echo "   1. Access ArgoCD at https://localhost:8080"
-echo "   2. Change the admin password"
-echo "   3. Configure Azure AD authentication"
-echo "   4. Set up your first application"
+echo "   1. **Configure DNS**: Point *.cloud.rbccoach.com to your Load Balancer IP"
+echo "   2. **Access ArgoCD**: https://${ARGOCD_URL} (after DNS setup)"
+echo "   3. **Fallback Access**: https://localhost:8080 (port-forward active)"
+echo "   4. Change the admin password"
+echo "   5. Configure Azure AD authentication"
+echo "   6. Set up your first application"
+echo ""
+echo "🔍 Get Load Balancer IP:"
+echo "   kubectl get service ingress-nginx-controller -n ingress-nginx"
 echo ""
 echo "🛑 To stop port forwarding: kill $PORT_FORWARD_PID"

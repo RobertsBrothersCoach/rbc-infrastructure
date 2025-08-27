@@ -1,0 +1,118 @@
+# cert-manager for automatic SSL certificates
+# Supports Let's Encrypt for *.cloud.rbccoach.com
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cert-manager
+  labels:
+    name: cert-manager
+
+---
+# cert-manager installation via Helm values
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cert-manager-values
+  namespace: cert-manager
+data:
+  values.yaml: |
+    # Resource optimization for cost savings
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+    
+    webhook:
+      resources:
+        requests:
+          cpu: 25m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi
+    
+    cainjector:
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+    
+    # Enable monitoring
+    prometheus:
+      enabled: true
+    
+    # Global settings
+    global:
+      leaderElection:
+        namespace: cert-manager
+
+---
+# Let's Encrypt ClusterIssuer for production certificates
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: devops@rbccoach.com  # Replace with actual email
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    solvers:
+    - http01:
+        ingress:
+          class: nginx
+
+---
+# Let's Encrypt ClusterIssuer for staging (testing)
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: devops@rbccoach.com  # Replace with actual email
+    privateKeySecretRef:
+      name: letsencrypt-staging
+    solvers:
+    - http01:
+        ingress:
+          class: nginx
+
+---
+# Installation script
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cert-manager-install
+  namespace: cert-manager
+data:
+  install.sh: |
+    #!/bin/bash
+    # Install cert-manager using Helm
+    
+    # Add cert-manager helm repo
+    helm repo add jetstack https://charts.jetstack.io
+    helm repo update
+    
+    # Install cert-manager
+    helm upgrade --install cert-manager jetstack/cert-manager \
+      --namespace cert-manager \
+      --create-namespace \
+      --version v1.13.0 \
+      --set installCRDs=true \
+      --values /etc/cert-manager-values/values.yaml \
+      --wait \
+      --timeout 300s
+    
+    echo "✅ cert-manager installed successfully!"
+    echo "🔍 Checking cert-manager pods..."
+    kubectl get pods -n cert-manager

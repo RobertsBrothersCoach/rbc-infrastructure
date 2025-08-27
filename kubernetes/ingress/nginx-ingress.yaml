@@ -1,0 +1,108 @@
+# nginx-ingress controller with custom domain support
+# Cost-optimized configuration for *.cloud.rbccoach.com
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ingress-nginx
+  labels:
+    name: ingress-nginx
+
+---
+# Install nginx-ingress controller via Helm values
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-ingress-values
+  namespace: ingress-nginx
+data:
+  values.yaml: |
+    controller:
+      # Cost optimization - single replica for dev
+      replicaCount: 1
+      
+      # Resource limits for cost control
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+      
+      # Service configuration
+      service:
+        type: LoadBalancer
+        annotations:
+          # Azure Load Balancer optimizations
+          service.beta.kubernetes.io/azure-load-balancer-sku: "basic"
+          service.beta.kubernetes.io/azure-load-balancer-resource-group: "RBCLeasingApp-Dev"
+      
+      # Ingress class
+      ingressClassResource:
+        name: nginx
+        enabled: true
+        default: true
+      
+      # Custom domain configuration
+      config:
+        # Enable real IP forwarding
+        use-forwarded-headers: "true"
+        compute-full-forwarded-for: "true"
+        use-proxy-protocol: "false"
+        
+        # SSL redirect
+        ssl-redirect: "true"
+        force-ssl-redirect: "true"
+        
+        # Custom error pages
+        custom-http-errors: "404,503"
+        
+      # Metrics for monitoring
+      metrics:
+        enabled: true
+        port: 9113
+      
+      # Pod disruption budget for availability
+      podDisruptionBudget:
+        enabled: false  # Single replica, no need for PDB
+        
+    # Default backend for custom error pages
+    defaultBackend:
+      enabled: true
+      replicaCount: 1
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 50m
+          memory: 64Mi
+
+---
+# Installation script reference
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-ingress-install
+  namespace: ingress-nginx
+data:
+  install.sh: |
+    #!/bin/bash
+    # Install nginx-ingress using Helm
+    
+    # Add ingress-nginx helm repo
+    helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+    helm repo update
+    
+    # Install nginx-ingress controller
+    helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
+      --namespace ingress-nginx \
+      --create-namespace \
+      --values /etc/nginx-values/values.yaml \
+      --wait \
+      --timeout 300s
+    
+    echo "✅ nginx-ingress controller installed successfully!"
+    echo "🔍 Getting Load Balancer IP..."
+    kubectl get service ingress-nginx-controller -n ingress-nginx

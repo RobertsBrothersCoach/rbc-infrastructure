@@ -1,5 +1,5 @@
-# ArgoCD Ingress for external access
-# Using nginx-ingress for cost-effective load balancing
+# ArgoCD Ingress with custom domain *.cloud.rbccoach.com
+# Using nginx-ingress with automatic SSL certificates
 
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -7,12 +7,15 @@ metadata:
   name: argocd-server-ingress
   namespace: argocd
   annotations:
-    # Use nginx ingress controller (cost-effective)
+    # Use nginx ingress controller
     kubernetes.io/ingress.class: nginx
     
     # SSL redirect and backend protocol
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    
+    # cert-manager for automatic SSL certificates
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
     
     # ArgoCD specific configuration
     nginx.ingress.kubernetes.io/server-snippet: |
@@ -22,13 +25,23 @@ metadata:
       client_header_timeout 60;
       client_max_body_size 1m;
       
+    # Additional headers for ArgoCD
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      
   labels:
     app.kubernetes.io/name: argocd-server
     app.kubernetes.io/component: server
     
 spec:
+  tls:
+  - hosts:
+    - argocd-dev.cloud.rbccoach.com
+    secretName: argocd-tls
+    
   rules:
-  - host: argocd-dev.rbc-leasing.com  # Will be configured with DNS later
+  - host: argocd-dev.cloud.rbccoach.com
     http:
       paths:
       - path: /
@@ -38,9 +51,23 @@ spec:
             name: argocd-server
             port:
               number: 80
-              
-  # TLS will be configured later with cert-manager
-  # tls:
-  # - hosts:
-  #   - argocd-dev.rbc-leasing.com
-  #   secretName: argocd-tls
+
+---
+# ArgoCD configuration with custom domain
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cmd-params-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-cmd-params-cm
+    app.kubernetes.io/part-of: argocd
+data:
+  # Server configuration for custom domain
+  server.insecure: "true"  # TLS terminated at ingress
+  server.rootpath: "/"
+  
+  # Performance optimizations
+  controller.repo.server.timeout.seconds: "60"
+  controller.status.processors: "5"
+  controller.operation.processors: "5"
