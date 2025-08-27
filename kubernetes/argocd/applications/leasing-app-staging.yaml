@@ -11,7 +11,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/your-org/rbc-infrastructure
+    repoURL: https://github.com/your-org/RBC-Infrastructure
     targetRevision: main
     path: kubernetes/apps/leasing-app/overlays/staging
   destination:

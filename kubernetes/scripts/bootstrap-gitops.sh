@@ -15,7 +15,7 @@ if ! kubectl get namespace argocd &> /dev/null; then
 fi
 
 # Get repository URL
-read -p "Enter your infrastructure repository URL (e.g., https://github.com/your-org/rbc-infrastructure): " REPO_URL
+read -p "Enter your infrastructure repository URL (e.g., https://github.com/your-org/RBC-Infrastructure): " REPO_URL
 
 if [ -z "$REPO_URL" ]; then
     echo "❌ Repository URL is required"
@@ -24,7 +24,7 @@ fi
 
 # Update app-of-apps with correct repository
 echo "📝 Configuring app-of-apps..."
-sed -i.bak "s|https://github.com/your-org/rbc-infrastructure|${REPO_URL}|g" ../argocd/applications/app-of-apps.yaml
+sed -i.bak "s|https://github.com/your-org/RBC-Infrastructure|${REPO_URL}|g" ../argocd/applications/app-of-apps.yaml
 
 # Apply ArgoCD projects
 echo "📦 Creating ArgoCD projects..."

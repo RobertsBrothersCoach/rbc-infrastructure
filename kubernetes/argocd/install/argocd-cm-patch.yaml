@@ -17,7 +17,7 @@ data:
     
   # Repository configuration
   repositories: |
-    - url: https://github.com/your-org/rbc-infrastructure
+    - url: https://github.com/your-org/RBC-Infrastructure
       type: git
     - url: https://github.com/your-org/RBC-LeasingApp
       type: git

@@ -166,8 +166,8 @@ Example GitHub Actions workflow:
 ```yaml
 - name: Update GitOps repository
   run: |
-    git clone https://github.com/${{ github.repository_owner }}/rbc-infrastructure
-    cd rbc-infrastructure
+    git clone https://github.com/${{ github.repository_owner }}/RBC-Infrastructure
+    cd RBC-Infrastructure
     ./scripts/update-image-tag.sh ${{ env.ENVIRONMENT }} backend ${{ env.VERSION }}
     git config user.name "GitHub Actions"
     git config user.email "actions@github.com"

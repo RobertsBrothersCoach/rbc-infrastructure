@@ -5,7 +5,7 @@ This repository contains both Infrastructure as Code (IaC) and GitOps configurat
 ## Repository Structure
 
 ```
-rbc-infrastructure/
+RBC-Infrastructure/
 ├── bicep/                     # Infrastructure as Code
 │   ├── modules/              # Reusable Bicep modules
 │   │   ├── aks/             # AKS cluster configuration
